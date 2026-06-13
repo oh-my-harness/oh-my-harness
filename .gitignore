@@ -1,0 +1,6 @@
+# 子仓库目录
+llm-api-adapter/
+llm-harness-core/
+llm-harness-runtime/
+coding-agent/
+llm-tutor/
