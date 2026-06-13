@@ -40,7 +40,7 @@ llm-api-adapter                             ← provider 适配层
 - 负责：agent loop、session 持久化、compaction、skills/PromptTemplate 加载、AgentHarness
 - 不负责：工具实现、模型注册、凭证存储、配置文件读取
 
-### llm-harness-runtime（设计中，尚未实现代码）
+### llm-harness-runtime（v0.2 已实现）
 - 负责：通用工具集（read/bash/edit/write/grep/find/ls）、ModelRegistry、AuthStorage、SettingsManager、扩展系统、AgentRuntime 组装
 - 不负责：领域专属工具、领域 system prompt
 
@@ -50,7 +50,7 @@ llm-api-adapter                             ← provider 适配层
 
 ## 当前临时状态（已知技术债）
 
-`llm-harness-runtime` 尚未实现，`coding-agent` 暂时自带了本应属于 runtime 的内容：
+`llm-harness-runtime` v0.2 已实现，但 `coding-agent` 的临时实现尚未迁移：
 
 | 文件 | 临时位置 | 目标位置 |
 |------|---------|---------|
@@ -58,11 +58,7 @@ llm-api-adapter                             ← provider 适配层
 | `src/settings.rs` | coding-agent | runtime SettingsManager |
 | bin 中的 provider 选择逻辑 | coding-agent | runtime ModelRegistry |
 
-**开发 runtime 时应将上述内容迁移，不要在 coding-agent 中继续扩展这些模块。**
-
-**runtime 实现期间的新功能原则：**
-- 新工具若属于 runtime-tools → 直接在 runtime 里实现，不要再往 coding-agent 的 `tools/` 加
-- 新工具若属于某个 agent 的领域专属 → 可以先在对应 agent 里实现，无需等 runtime
+**迁移时不要在 coding-agent 中继续扩展这些模块。**
 
 ## 耦合红线
 
@@ -101,3 +97,20 @@ llm-api-adapter                             ← provider 适配层
 
 - `llm-harness-core/CLAUDE.md` — harness-core 的实现原则和测试规范
 - `llm-api-adapter/CLAUDE.md` — adapter 的类型设计和 provider 实现约定
+
+## 开发完成后必做：更新 STATUS.md
+
+**每次开发任务完成后，必须同步更新 `STATUS.md` 并提交到 `oh-my-harness/oh-my-harness` 仓库。**
+
+更新内容包括：
+- 对应仓库/模块的状态标记（⚠️ → ✅ 等）
+- 已完成的能力简述
+- 待做事项调整
+- 更新"最后更新"日期
+
+```bash
+# 在 oh-my-harness/ 目录下执行
+git add STATUS.md CLAUDE.md
+git commit -m "docs: update STATUS.md after <任务名>"
+git push
+```
