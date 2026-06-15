@@ -75,7 +75,7 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
 ### eda-agent ✅ v0.1 实现完成（2026-06-14）
-针对东方晶源/光科芯图内部 AMC 光刻模型校准流水线的专用 Agent。
+针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
 
 5 个 EDA 专属工具：
 - `run_eda_job`：PanGen 本地进程执行 + 轮询（早收敛检测、日志监控、CancellationToken）

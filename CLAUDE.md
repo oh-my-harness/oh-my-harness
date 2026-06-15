@@ -8,7 +8,7 @@ oh-my-harness/
 ├── llm-harness-core      # agent 框架核心
 ├── llm-harness-runtime   # 运行时基础设施（tools/auth/config/registry）
 ├── coding-agent          # coding 领域 agent
-├── eda-agent             # EDA 模型校准 agent（东方晶源/光科芯图）
+├── eda-agent             # EDA 模型校准 agent（光刻 EDA 仿真工具链）
 └── llm-tutor             # 教学辅导 agent
 ```
 
