@@ -7,7 +7,9 @@ oh-my-harness/
 ├── llm-api-adapter       # LLM provider 适配层
 ├── llm-harness-core      # agent 框架核心
 ├── llm-harness-runtime   # 运行时基础设施（tools/auth/config/registry）
-└── coding-agent          # coding 领域 agent
+├── coding-agent          # coding 领域 agent
+├── eda-agent             # EDA 模型校准 agent（东方晶源/光科芯图）
+└── llm-tutor             # 教学辅导 agent
 ```
 
 ## 层级架构与依赖方向
