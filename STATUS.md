@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-15（eda-agent debug + 工具链验证）
+> 最后更新：2026-06-17（eda-agent mask_search 端到端验证完成）
 
 ---
 
@@ -91,13 +91,14 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 - 3 个 mock 集成测试，`cargo clippy` 零警告
 - 默认配置：pangen `/data/pangen/pangen_2026.04.00.release/bin/pangen`，gateway `192.168.18.116:4730`
 
-**已验证（2026-06-15 真实环境）：**
+**已验证（2026-06-17 真实环境，medium_case1）：**
 - `list_eda_files` / `read_eda_file` / `search_knowledge` / `record_experience` 全部通过
 - `run_eda_job`：pangen 启动 → 轮询 → 结果检测完整流程通过
-- Bug 修复：`AgentEvent::Error` 静默吞掉、`ANTHROPIC_BASE_URL` 未读取、stdout 未 flush、pangen `sys_lib` 路径未包含、`--model` 默认值运行时解析
+- **mask_search 端到端完整通过**（compute_tcc 49/49 + ga_calibrate_add_0 35 代，产出 `optimize_result/result_0_0/Model_0/model.yaml`）
+- Bug 修复（累计）：BUG-001 env 转发、设计缺陷-001 子进程退出检测、设计缺陷-002 LD_LIBRARY_PATH 污染、BUG-003 segfault（preprocessThreads=1）、stall_limit 过小导致假超时（新增 per-call override）
 
 **待做：**
-- 真实 EDA case 端到端验证（需要完整 wizard.json + 校准数据）
+- 继续后续阶段：term_decision → term_selection → resist_tune → model_check
 
 ### coding-agent ✅ 可运行，含临时技术债
 - 完整 CLI（one-shot / interactive REPL / session 管理）
