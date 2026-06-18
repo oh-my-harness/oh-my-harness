@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-17（eda-agent mask_search 端到端验证完成）
+> 最后更新：2026-06-18（eda-agent ArcGen pipeline 集成验证完成）
 
 ---
 
@@ -91,14 +91,23 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 - 3 个 mock 集成测试，`cargo clippy` 零警告
 - 默认配置：pangen `/data/pangen/pangen_2026.04.00.release/bin/pangen`，gateway `192.168.18.116:4730`
 
-**已验证（2026-06-17 真实环境，medium_case1）：**
-- `list_eda_files` / `read_eda_file` / `search_knowledge` / `record_experience` 全部通过
-- `run_eda_job`：pangen 启动 → 轮询 → 结果检测完整流程通过
-- **mask_search 端到端完整通过**（compute_tcc 49/49 + ga_calibrate_add_0 35 代，产出 `optimize_result/result_0_0/Model_0/model.yaml`）
-- Bug 修复（累计）：BUG-001 env 转发、设计缺陷-001 子进程退出检测、设计缺陷-002 LD_LIBRARY_PATH 污染、BUG-003 segfault（preprocessThreads=1）、stall_limit 过小导致假超时（新增 per-call override）
+**已验证（2026-06-18 真实环境，small_case1 ArcGen pipeline 集成）：**
+- EDA Agent 替换 ArcGen 所有 LLM 调用节点，完整跑通 AMC 校准全流程（08:49~10:29，约 100 分钟）
+- 调用节点：`build_calibration_context` / `optical_result_analysis` / `mask_result_analysis` / `term_decision` / `term_selection_lite`（6 轮 LLM 驱动迭代）
+- `term_decision`：EDA Agent 正确分析"10 gauges 严重欠约束"，给出保守决策（add_iter=0, del_iter=1, 4 terms）
+- `term_selection_lite`：EDA Agent 驱动逐轮 del，诊断过拟合（cal=0.034, val=0.407）并做出有物理依据的 del 决策
+- pipeline 最终完成，产出校准报告（overall=FAIL，预期，因 pframe_lite 无 grid 优化）
+
+**发现的设计问题（已记录 DESIGN_ISSUES.md）：**
+- D-001：EDA Agent 与 ReActEngine 双层循环冲突（已修复）
+- D-002：ResultAnalyzer 节点绕过 JSON 提取，EDA Agent 输出降级为 WARNING（中严重度）
+- D-003：EDA_AGENT_JOB_DIR 静态设置，--new-run 后指向旧目录（中严重度）
+- D-004：term_selection_lite"经验缓存"绕过 EDA Agent term_decision，17 term 覆盖 4 term 决策（高严重度）
+- D-005：EDA Agent JSON 解析失败被静默降级为 stop，term_selection 仅跑 6/19 轮（高严重度）
 
 **待做：**
-- 继续后续阶段：term_decision → term_selection → resist_tune → model_check
+- 修复 D-002/D-003/D-004/D-005 后重新验证
+- 继续 resist_tune 阶段验证（本次已跳过）
 
 ### coding-agent ✅ 可运行，含临时技术债
 - 完整 CLI（one-shot / interactive REPL / session 管理）
