@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-18（eda-agent ArcGen pipeline 集成验证完成）
+> 最后更新：2026-06-18（D-008 fix + term_decision EDA Agent 端到端验证通过）
 
 ---
 
@@ -98,16 +98,12 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 - `term_selection_lite`：EDA Agent 驱动逐轮 del，诊断过拟合（cal=0.034, val=0.407）并做出有物理依据的 del 决策
 - pipeline 最终完成，产出校准报告（overall=FAIL，预期，因 pframe_lite 无 grid 优化）
 
-**发现的设计问题（已记录 DESIGN_ISSUES.md）：**
-- D-001：EDA Agent 与 ReActEngine 双层循环冲突（已修复）
-- D-002：ResultAnalyzer 节点绕过 JSON 提取，EDA Agent 输出降级为 WARNING（中严重度）
-- D-003：EDA_AGENT_JOB_DIR 静态设置，--new-run 后指向旧目录（中严重度）
-- D-004：term_selection_lite"经验缓存"绕过 EDA Agent term_decision，17 term 覆盖 4 term 决策（高严重度）
-- D-005：EDA Agent JSON 解析失败被静默降级为 stop，term_selection 仅跑 6/19 轮（高严重度）
-
-**待做：**
-- 修复 D-002/D-003/D-004/D-005 后重新验证
-- 继续 resist_tune 阶段验证（本次已跳过）
+**Phase B 实现（2026-06-18）：**
+- `_TermAdvisorProxy` 替换 `term_decision` 节点的 Python ReActEngine，EDA Agent 自主决策
+- `read_vault_file` / `list_vault_dir` 两个新工具，让 Agent 直接读取 Obsidian Vault 文档
+- D-008 修复：`_build_decide_prompt` 移除预消化数据，Agent 必须主动调用工具获取信息
+- `agent.run()` 广播缓冲区竞态修复（D-fix）：改用 `build_context()` 从 session 直读最后一条助手消息，彻底消除 >256 事件时 stdout 为空的问题
+- 端到端验证（term_decision 风格）：list_vault_dir + read_vault_file×3 + search_knowledge×3，产出完整合规 JSON（含 customized_add_map、terms、rationale）
 
 ### coding-agent ✅ 可运行，含临时技术债
 - 完整 CLI（one-shot / interactive REPL / session 管理）
