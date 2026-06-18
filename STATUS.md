@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-18（D-008 fix + term_decision EDA Agent 端到端验证通过）
+> 最后更新：2026-06-18（Phase B ArcGen 真实 Pipeline 集成验证通过）
 
 ---
 
@@ -104,6 +104,14 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 - D-008 修复：`_build_decide_prompt` 移除预消化数据，Agent 必须主动调用工具获取信息
 - `agent.run()` 广播缓冲区竞态修复（D-fix）：改用 `build_context()` 从 session 直读最后一条助手消息，彻底消除 >256 事件时 stdout 为空的问题
 - 端到端验证（term_decision 风格）：list_vault_dir + read_vault_file×3 + search_knowledge×3，产出完整合规 JSON（含 customized_add_map、terms、rationale）
+
+**Phase B ArcGen 真实 Pipeline 集成验证（2026-06-18）：**
+- `--restart-from term_decision` 跑 `amc-pipeline-20260618-084928`，`_TermAdvisorProxy` 路径全程通过
+- `term_decision` 节点 EDA Agent（Rust）完成，耗时 ~1min10s；产出物理合规决策：
+  - add_iter=1, del_iter=1，TopoField 加入 customized_add_map（知识库 Dark Field 推荐），Ax/Bx sigma 范围从 [30,40] 放宽至 [30,120]
+  - 完整 rationale：NTD+Binary+Dark Field+TE+NA=1.35，10 gauges 过拟合风险 → 保守配置
+- pipeline 继续推进至 `term_selection_lite`（Python LLM agent）正常运行
+- ArcGen 侧 bug fix：`run.py` 的 `restart_from`/续跑路径 `_resist_engine` 未初始化 → `UnboundLocalError`，已修复并提交（`feat/eda-agent-phase-c`）
 
 ### coding-agent ✅ 可运行，含临时技术债
 - 完整 CLI（one-shot / interactive REPL / session 管理）
