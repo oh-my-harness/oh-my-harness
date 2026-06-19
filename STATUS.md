@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-18（Phase B ArcGen 真实 Pipeline 集成验证通过）
+> 最后更新：2026-06-19（Phase C ArcGen term_selection_lite + resist_tune 集成验证通过）
 
 ---
 
@@ -105,7 +105,20 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 - `agent.run()` 广播缓冲区竞态修复（D-fix）：改用 `build_context()` 从 session 直读最后一条助手消息，彻底消除 >256 事件时 stdout 为空的问题
 - 端到端验证（term_decision 风格）：list_vault_dir + read_vault_file×3 + search_knowledge×3，产出完整合规 JSON（含 customized_add_map、terms、rationale）
 
-**Phase B ArcGen 真实 Pipeline 集成验证（2026-06-18）：**
+**Phase C ArcGen 真实 Pipeline 集成验证（2026-06-19）：**
+- EDA Agent decide_fn 替换 `term_selection_lite` 每轮 add/del/stop 决策，端到端验证通过
+- C-001/C-002/C-003 三个 bug 全部修复（commit 01afeb9, 4d6b6b8 on `fix/resist-tune-ssh-check-arg`）：
+  - C-001：add 失败时在下轮 prompt 中明示（`last_add_failed_op`）
+  - C-002：add_pool 展示为 "Ax（已用 2/4）" 格式，仅列有余量的 operation
+  - C-003：del 未改善 best_uwrms 时，下轮 prompt 明示回滚（`last_del_no_improve`）
+- `resist_tune._poll_any` API 修复：旧 `(job_dir, list, timeout_sec=)` → 新 `([Path], timeout=)`（commit 4d6b6b8）
+- Phase C v2 验证结果：`term_selection_lite` 4 轮完成（v1 需 8 轮，无 C-003 fix）
+  - Round 0: del UV_1 → val 0.291→0.285
+  - Round 1: del UV_2 → uwrms 0.030→0.027 (best)
+  - Round 2: del UV_3 → no improve → C-003 反馈 → Round 3 stop
+  - `resist_tune` 100 轮 calibrate 完成，cal_uwrms=0.033，验证通过
+  - pipeline 推进至 model_check（threshold=0.782 > 0.6，属 small_case1 9-gauge 数据质量限制）
+- ArcGen MR !253：http://10.0.20.120/opc-agent-group/ArcGen/-/merge_requests/253（含所有 Phase B/C fix）
 - `--restart-from term_decision` 跑 `amc-pipeline-20260618-084928`，`_TermAdvisorProxy` 路径全程通过
 - `term_decision` 节点 EDA Agent（Rust）完成，耗时 ~1min10s；产出物理合规决策：
   - add_iter=1, del_iter=1，TopoField 加入 customized_add_map（知识库 Dark Field 推荐），Ax/Bx sigma 范围从 [30,40] 放宽至 [30,120]
