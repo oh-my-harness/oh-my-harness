@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-22（eda-agent lite mode 实现完成）
+> 最后更新：2026-06-22（eda-agent small_case1 完整验证，prompt 修复 BUG-006/007/008/009/DD-003/005）
 
 ---
 
@@ -74,7 +74,7 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.2 lite mode 完成（2026-06-22）
+### eda-agent ✅ v0.2 lite mode 完成 + small_case1 完整验证（2026-06-22）
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
 
 6 个 EDA 专属工具：
@@ -92,40 +92,21 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 - CLI：`--job-dir / --vault-dir / --pangen-bin / --gateway / --arcgen-dir / -p`
 - 3 个 mock 集成测试，`cargo clippy` 零警告
 
-**已验证（2026-06-18 真实环境，small_case1 ArcGen pipeline 集成）：**
-- EDA Agent 替换 ArcGen 所有 LLM 调用节点，完整跑通 AMC 校准全流程（08:49~10:29，约 100 分钟）
-- 调用节点：`build_calibration_context` / `optical_result_analysis` / `mask_result_analysis` / `term_decision` / `term_selection_lite`（6 轮 LLM 驱动迭代）
-- `term_decision`：EDA Agent 正确分析"10 gauges 严重欠约束"，给出保守决策（add_iter=0, del_iter=1, 4 terms）
-- `term_selection_lite`：EDA Agent 驱动逐轮 del，诊断过拟合（cal=0.034, val=0.407）并做出有物理依据的 del 决策
-- pipeline 最终完成，产出校准报告（overall=FAIL，预期，因 pframe_lite 无 grid 优化）
+**Phase B/C 验证（2026-06-18/19）**：详见上方历史记录。
 
-**Phase B 实现（2026-06-18）：**
-- `_TermAdvisorProxy` 替换 `term_decision` 节点的 Python ReActEngine，EDA Agent 自主决策
-- `read_vault_file` / `list_vault_dir` 两个新工具，让 Agent 直接读取 Obsidian Vault 文档
-- D-008 修复：`_build_decide_prompt` 移除预消化数据，Agent 必须主动调用工具获取信息
-- `agent.run()` 广播缓冲区竞态修复（D-fix）：改用 `build_context()` 从 session 直读最后一条助手消息，彻底消除 >256 事件时 stdout 为空的问题
-- 端到端验证（term_decision 风格）：list_vault_dir + read_vault_file×3 + search_knowledge×3，产出完整合规 JSON（含 customized_add_map、terms、rationale）
+**small_case1 完整 EDA Agent orchestrator 验证（2026-06-22，17:56~19:30，约 94 分钟）**：
+- EDA Agent 独立 orchestrator 模式（不依赖 ArcGen Python），驱动完整 lite 模式流水线
+- 执行路径：skip findoptics/optical/mask（结果已存在）→ term_decision → term_selection_lite（多轮迭代）→ model_check
+- 发现并记录 BUG-006/007/BUG-008/BUG-009/DD-003/DD-005 共 6 个问题（见 eda-agent/ISSUES.md）
+- Prompt 修复：BUG-006/007/BUG-008/DD-003（commit d2e3eba）+ BUG-009/DD-005（commit 1df81c1）均已修复
+- 核心发现：small_case1 仅 10 cal gauges，NTD ultra 16 term 严重过拟合（cal=0.029, val=0.451）；11 项基础 NTD term 最佳（cal=0.109, val=0.311）；根本限制是 gauge 数量不足（需 20-30+ gauge 才能收敛）
+- check_E 方向修复（DD-003）已生效：Agent 正确识别 cal>val=欠拟合，但仍违反了 add 规则（直接进 model_check），已强化 prompt（DD-005）
 
-**Phase C ArcGen 真实 Pipeline 集成验证（2026-06-19）：**
-- EDA Agent decide_fn 替换 `term_selection_lite` 每轮 add/del/stop 决策，端到端验证通过
-- C-001/C-002/C-003 三个 bug 全部修复（commit 01afeb9, 4d6b6b8 on `fix/resist-tune-ssh-check-arg`）：
-  - C-001：add 失败时在下轮 prompt 中明示（`last_add_failed_op`）
-  - C-002：add_pool 展示为 "Ax（已用 2/4）" 格式，仅列有余量的 operation
-  - C-003：del 未改善 best_uwrms 时，下轮 prompt 明示回滚（`last_del_no_improve`）
-- `resist_tune._poll_any` API 修复：旧 `(job_dir, list, timeout_sec=)` → 新 `([Path], timeout=)`（commit 4d6b6b8）
-- Phase C v2 验证结果：`term_selection_lite` 4 轮完成（v1 需 8 轮，无 C-003 fix）
-  - Round 0: del UV_1 → val 0.291→0.285
-  - Round 1: del UV_2 → uwrms 0.030→0.027 (best)
-  - Round 2: del UV_3 → no improve → C-003 反馈 → Round 3 stop
-  - `resist_tune` 100 轮 calibrate 完成，cal_uwrms=0.033，验证通过
-  - pipeline 推进至 model_check（threshold=0.782 > 0.6，属 small_case1 9-gauge 数据质量限制）
-- ArcGen MR !253：http://10.0.20.120/opc-agent-group/ArcGen/-/merge_requests/253（含所有 Phase B/C fix）
-- `--restart-from term_decision` 跑 `amc-pipeline-20260618-084928`，`_TermAdvisorProxy` 路径全程通过
-- `term_decision` 节点 EDA Agent（Rust）完成，耗时 ~1min10s；产出物理合规决策：
-  - add_iter=1, del_iter=1，TopoField 加入 customized_add_map（知识库 Dark Field 推荐），Ax/Bx sigma 范围从 [30,40] 放宽至 [30,120]
-  - 完整 rationale：NTD+Binary+Dark Field+TE+NA=1.35，10 gauges 过拟合风险 → 保守配置
-- pipeline 继续推进至 `term_selection_lite`（Python LLM agent）正常运行
-- ArcGen 侧 bug fix：`run.py` 的 `restart_from`/续跑路径 `_resist_engine` 未初始化 → `UnboundLocalError`，已修复并提交（`feat/eda-agent-phase-c`）
+**待做（优先级排序）**：
+- BUG-009：model_check result_pattern 已改为 gauge.txt（1df81c1），需新运行验证
+- DD-005：check_E 进入 model_check 条件已强化（1df81c1），需新运行验证
+- BUG-005：term_decision feedback 循环重新评估（独立 orchestrator 架构下）
+- 更大 case 验证：需 60+ gauge case 才能充分验证 ntd_ultra 迭代收敛
 
 ### coding-agent ✅ 可运行，含临时技术债
 - 完整 CLI（one-shot / interactive REPL / session 管理）
