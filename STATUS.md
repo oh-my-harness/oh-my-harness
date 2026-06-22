@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-22（eda-agent small_case1 完整验证，prompt 修复 BUG-006/007/008/009/DD-003/005）
+> 最后更新：2026-06-22（eda-agent 节点级 tool + skill 重构，commit 8fd7ef9）
 
 ---
 
@@ -74,39 +74,25 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.2 lite mode 完成 + small_case1 完整验证（2026-06-22）
+### eda-agent ✅ v0.3 节点级 tool + skill 重构完成（2026-06-22）
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
 
-6 个 EDA 专属工具：
-- `run_eda_job`：PanGen 本地进程执行 + 轮询（早收敛检测、日志监控、CancellationToken；新增 `clear_existing_result` 参数）
-- `write_eda_file`：写 job_dir 内文件，含路径穿越保护（lite/term_pool.json 迭代更新用）
-- `read_eda_file`：读取 job_dir 下任意文件（路径穿越保护）
-- `list_eda_files`：glob 模式列文件
-- `search_knowledge`：递归 grep Obsidian Vault `.md` 文件
-- `record_experience`：追加 `run_experience.jsonl`
+**新增（8fd7ef9 节点级重构）**：
+- `src/tools/pangen_runner.rs`：PanGen spawn+poll 共享 helper，多路候选 result_patterns，build_env() 独立
+- `src/tools/node_tools.rs`：6 个节点 tool（RunFindOptics / RunOpticalSearch / RunGridparamSearch / RunMaskSearch / RunCalibrationIter / RunModelCheck），Rust 硬编码脚本路径，LLM 输入极简（action+term_names 格式参照 ArcGen term_advisor）
+- `skills/amc-lite-pipeline/SKILL.md`：流水线编排 + term_decision 规则（gauge/term 比率）+ calibration_iter 决策表（来自 ArcGen term_advisor），嵌入 agent.rs
 
-已实现：
-- EdaAgent + EdaAgentBuilder（注入 LlmClient + ExecutionEnv，RetryConfig 429/529 重试）
-- System prompt：**7 节点 AMC Lite 校准流水线**（findoptics → optical_search → gridparam → mask_search → term_decision → **term_selection_lite** → model_check）
-- `term_selection_lite` 迭代循环：Steps A-E，lite_check 字段（A/B/C/D/E），决策表，max 20 轮
-- CLI：`--job-dir / --vault-dir / --pangen-bin / --gateway / --arcgen-dir / -p`
-- 3 个 mock 集成测试，`cargo clippy` 零警告
+**改善目标**：消除 small_case1 验证中的行为漂移（model_check 跑两遍、list_eda_files 调 9 次、group 切换），让 LLM 只处理 term_decision 和 calibration 迭代两个真正的决策点。
 
-**Phase B/C 验证（2026-06-18/19）**：详见上方历史记录。
-
-**small_case1 完整 EDA Agent orchestrator 验证（2026-06-22，17:56~19:30，约 94 分钟）**：
-- EDA Agent 独立 orchestrator 模式（不依赖 ArcGen Python），驱动完整 lite 模式流水线
-- 执行路径：skip findoptics/optical/mask（结果已存在）→ term_decision → term_selection_lite（多轮迭代）→ model_check
-- 发现并记录 BUG-006/007/BUG-008/BUG-009/DD-003/DD-005 共 6 个问题（见 eda-agent/ISSUES.md）
-- Prompt 修复：BUG-006/007/BUG-008/DD-003（commit d2e3eba）+ BUG-009/DD-005（commit 1df81c1）均已修复
-- 核心发现：small_case1 仅 10 cal gauges，NTD ultra 16 term 严重过拟合（cal=0.029, val=0.451）；11 项基础 NTD term 最佳（cal=0.109, val=0.311）；根本限制是 gauge 数量不足（需 20-30+ gauge 才能收敛）
-- check_E 方向修复（DD-003）已生效：Agent 正确识别 cal>val=欠拟合，但仍违反了 add 规则（直接进 model_check），已强化 prompt（DD-005）
+**历史 6 个 prompt bug（BUG-006/007/008/009/DD-003/005）均已在重构中系统性修复**：
+- BUG-008/BUG-009：RunModelCheckTool 硬编码 result_pattern=`gauge.txt`，不依赖不存在的 report.json
+- BUG-006：run_calibration_iter 工具内部修改 term_pool.json，term_decision 无法调用 write_eda_file
+- BUG-007/DD-005：skill 中明确约束 group 锁定 + check_E FAIL 时禁止进 model_check
 
 **待做（优先级排序）**：
-- BUG-009：model_check result_pattern 已改为 gauge.txt（1df81c1），需新运行验证
-- DD-005：check_E 进入 model_check 条件已强化（1df81c1），需新运行验证
-- BUG-005：term_decision feedback 循环重新评估（独立 orchestrator 架构下）
-- 更大 case 验证：需 60+ gauge case 才能充分验证 ntd_ultra 迭代收敛
+- 新架构端到端验证：small_case1 重跑，确认无行为漂移
+- BUG-005 重新定义（新架构下反馈循环）
+- 更大 case（60+ gauge）验证 ntd_ultra 收敛
 
 ### coding-agent ✅ 可运行，含临时技术债
 - 完整 CLI（one-shot / interactive REPL / session 管理）
