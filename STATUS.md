@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-19（Phase C ArcGen term_selection_lite + resist_tune 集成验证通过）
+> 最后更新：2026-06-22（eda-agent lite mode 实现完成）
 
 ---
 
@@ -74,22 +74,23 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.1 实现完成（2026-06-14）
+### eda-agent ✅ v0.2 lite mode 完成（2026-06-22）
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
 
-5 个 EDA 专属工具：
-- `run_eda_job`：PanGen 本地进程执行 + 轮询（早收敛检测、日志监控、CancellationToken）
+6 个 EDA 专属工具：
+- `run_eda_job`：PanGen 本地进程执行 + 轮询（早收敛检测、日志监控、CancellationToken；新增 `clear_existing_result` 参数）
+- `write_eda_file`：写 job_dir 内文件，含路径穿越保护（lite/term_pool.json 迭代更新用）
 - `read_eda_file`：读取 job_dir 下任意文件（路径穿越保护）
 - `list_eda_files`：glob 模式列文件
 - `search_knowledge`：递归 grep Obsidian Vault `.md` 文件
 - `record_experience`：追加 `run_experience.jsonl`
 
 已实现：
-- EdaAgent + EdaAgentBuilder（注入 LlmClient + ExecutionEnv）
-- System prompt：8 节点 AMC 校准流水线（findoptics → term_selection → model_check 等）
-- CLI：`--job-dir / --vault-dir / --pangen-bin / --gateway / -p`
+- EdaAgent + EdaAgentBuilder（注入 LlmClient + ExecutionEnv，RetryConfig 429/529 重试）
+- System prompt：**7 节点 AMC Lite 校准流水线**（findoptics → optical_search → gridparam → mask_search → term_decision → **term_selection_lite** → model_check）
+- `term_selection_lite` 迭代循环：Steps A-E，lite_check 字段（A/B/C/D/E），决策表，max 20 轮
+- CLI：`--job-dir / --vault-dir / --pangen-bin / --gateway / --arcgen-dir / -p`
 - 3 个 mock 集成测试，`cargo clippy` 零警告
-- 默认配置：pangen `/data/pangen/pangen_2026.04.00.release/bin/pangen`，gateway `192.168.18.116:4730`
 
 **已验证（2026-06-18 真实环境，small_case1 ArcGen pipeline 集成）：**
 - EDA Agent 替换 ArcGen 所有 LLM 调用节点，完整跑通 AMC 校准全流程（08:49~10:29，约 100 分钟）
