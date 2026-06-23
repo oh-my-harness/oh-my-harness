@@ -74,8 +74,14 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.3.1 RunResistTuneTool + ArcGen pipeline 对齐（2026-06-23）
+### eda-agent ✅ v0.3.2 Drift-A 修复（2026-06-23）
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
+
+**新增（20953d3，v0.3.2）**：
+- `model_check_done.txt` 标记：RunModelCheckTool 首次成功写标记，第二次调用直接返回缓存结果（修复 run3 Drift-A：run_model_check 调用 6 次）
+- SKILL.md 漂移修复：upgrade_group 语义澄清（切换 group ≠ 恢复 terms）、run_eda_job 明确禁止、calibration_iter 文件读取硬限制（read_eda_file ≤3，list_eda_files=0）
+
+**run3 结果（v0.3.1）**：8 节点完整跑通；cal=0.022nm，val=0.391nm（过拟合）；4 个行为漂移记录于 `RUN_LOG_v0.3.1_run3.md`
 
 **新增（416f5dc，v0.3.1）**：
 - `RunResistTuneTool`（节点 7）：先前完全缺失。生成动态 fit_resist_model_ntd_w7.py（用 regex 替换实际 focus/metro_p/bias/out_corner），清除 .tccfiles，运行 pframe_resist_tune.py（100 轮完整 calibrate），轮询 calibration_result_final.json
