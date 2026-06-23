@@ -74,19 +74,17 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.3 节点级 tool + skill 重构完成（2026-06-22）
+### eda-agent ✅ v0.3.1 RunResistTuneTool + ArcGen pipeline 对齐（2026-06-23）
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
 
-**新增（8fd7ef9 节点级重构）**：
-- `src/tools/pangen_runner.rs`：PanGen spawn+poll 共享 helper，多路候选 result_patterns，build_env() 独立
-- `src/tools/node_tools.rs`：6 个节点 tool（RunFindOptics / RunOpticalSearch / RunGridparamSearch / RunMaskSearch / RunCalibrationIter / RunModelCheck），Rust 硬编码脚本路径，LLM 输入极简（action+term_names 格式参照 ArcGen term_advisor）
-- `skills/amc-lite-pipeline/SKILL.md`：流水线编排 + term_decision 规则（gauge/term 比率）+ calibration_iter 决策表（来自 ArcGen term_advisor），嵌入 agent.rs
+**新增（416f5dc，v0.3.1）**：
+- `RunResistTuneTool`（节点 7）：先前完全缺失。生成动态 fit_resist_model_ntd_w7.py（用 regex 替换实际 focus/metro_p/bias/out_corner），清除 .tccfiles，运行 pframe_resist_tune.py（100 轮完整 calibrate），轮询 calibration_result_final.json
+- `upgrade_group` action（RunCalibrationIterTool）：Check B FAIL + del 回退 ≥2 次时触发，把目标 group 的 init terms 全部重置为 used=1
+- SKILL.md 完全对齐 ArcGen graph.py lite 分支：8 节点（新增 run_resist_tune）、20 轮硬停止、批量删除规则（R0-4: del 2-3）、行为漂移记录规则
 
-**改善目标**：消除 small_case1 验证中的行为漂移（model_check 跑两遍、list_eda_files 调 9 次、group 切换），让 LLM 只处理 term_decision 和 calibration 迭代两个真正的决策点。
-
-**历史 6 个 prompt bug（BUG-006/007/008/009/DD-003/005）均已在重构中系统性修复**：
-- BUG-008/BUG-009：RunModelCheckTool 硬编码 result_pattern=`gauge.txt`，不依赖不存在的 report.json
-- BUG-006：run_calibration_iter 工具内部修改 term_pool.json，term_decision 无法调用 write_eda_file
+**v0.3 状态（8fd7ef9）**：
+- 6 个节点 tool（FindOptics/OpticalSearch/GridparamSearch/MaskSearch/CalibrationIter/ModelCheck）
+- small_case1 验证：节点 1-4 全部正确执行，run_calibration_iter SIGSEGV 根因为 .tccfiles 缓存失效（已修复）
 - BUG-007/DD-005：skill 中明确约束 group 锁定 + check_E FAIL 时禁止进 model_check
 
 **待做（优先级排序）**：
