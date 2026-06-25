@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-25（eda-agent v0.3.4：BUG-006 + BUG-007 修复，fresh job_dir 全流程无需手动干预）
+> 最后更新：2026-06-25（eda-agent v0.3.4：BUG-005/006/007 全部修复，fresh job_dir 完整自动化）
 
 ---
 
@@ -74,22 +74,17 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.3.4 BUG-006 + BUG-007 修复，fresh job_dir 全流程无需手动干预（2026-06-25）
+### eda-agent ✅ v0.3.4 BUG-005/006/007 全部修复，fresh job_dir 完整自动化（2026-06-25）
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
 
-**新增（966bb8a，v0.3.4）**：
-- **BUG-007 修复**：`RunMaskSearchTool::ensure_optimize_result()` 在 done marker 写入时自动创建 `optimize_result/result_ga.yaml`（minimal YAML，`optimize_0` key）和 symlink `optimize_result/result_0_0/` → 实际 mask_search 结果目录，修复 `pframe_model_check.py` 的 `FileNotFoundError`
-- **BUG-006 修复**：`RunResistTuneTool` 自动从 `arcgen_dir/langgraph_pipeline/lite/` 复制 `*.py` 到 `job_dir/lite/`，修复 fresh job_dir 的 ImportError
+**新增（05f8b85，v0.3.4）**：
+- **BUG-005 修复**：新增 `--wizard-template <path>` CLI 参数；`RunFindOpticsTool` 在首次执行前调用 `init_wizard_json()`，自动从模板复制 wizard.json 并 patch `pages[1].data.gds.gauge` + MG.Submit 字段
+- **BUG-007 修复**：`ensure_optimize_result()` 自动创建 `optimize_result/result_ga.yaml` stub + symlink
+- **BUG-006 修复**：`RunResistTuneTool` 自动复制 `lite/*.py` 到 `job_dir/lite/`
 
-**run9 结果（v0.3.4，fresh job_dir，全 8 节点首次运行）**：
-8 节点全部执行；reset_for_recalibration 循环正确 10 次；max_retries_exhausted 后接受结果 ✅
-过拟合属 9-gauge 数据集规模问题，非代码 bug。
+**run9 结果（v0.3.4，fresh job_dir，全 8 节点首次运行）**：8 节点全部执行；10 次 reset 循环正确；max_retries_exhausted 后接受结果 ✅
 
-**已知待修复**：
-- BUG-005（wizard.json 5个 pages 结构）：新 job_dir 需从已知好的 job_dir 复制 wizard.json
-
-**待做（下一阶段 v0.4）**：
-- orchestrator runner（YAML 声明式编排，彻底消除行为漂移）
+**待做（下一阶段 v0.4）**：orchestrator runner（YAML 声明式编排，彻底消除行为漂移）
 
 ### coding-agent ✅ 可运行，含临时技术债
 - 完整 CLI（one-shot / interactive REPL / session 管理）
