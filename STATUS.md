@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-26（eda-agent v0.4：orchestrator 开发完成并 E2E 验证通过）
+> 最后更新：2026-06-26（eda-agent v0.4：ArcGen 对齐 — model_check_feedback + execute_restart）
 
 ---
 
