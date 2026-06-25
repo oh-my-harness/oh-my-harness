@@ -116,3 +116,7 @@ git add STATUS.md CLAUDE.md
 git commit -m "docs: update STATUS.md after <任务名>"
 git push
 ```
+
+## 文档同步原则（所有子项目通用）
+
+**有效结果及时同步**：跑通验证、修了 bug、完成一个阶段后，**当场**更新对应文档（HANDOFF / ORCHESTRATOR / STATUS 等），不要攒着留给下一次。判断标准：新开一个对话只看这些文档能否快速接手？不能则需要更新。
