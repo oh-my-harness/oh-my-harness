@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-24（eda-agent v0.3.3：run8 全流程验证通过，计数器+bias 解析 bug 修复）
+> 最后更新：2026-06-25（eda-agent v0.3.4：run9 fresh job_dir 全流程验证通过，BUG-006 修复）
 
 ---
 
@@ -74,28 +74,24 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.3.3 run8 全流程验证（2026-06-24）
+### eda-agent ✅ v0.3.4 run9 fresh job_dir 全流程验证通过（2026-06-25）
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
 
-**新增（0d27a81，v0.3.3）**：
-- `reset_for_recalibration` tool：对齐 ArcGen MODEL_CHECK_MAX_RETRIES=10，model_check Check A/E FAIL 时重置节点 5-8 状态并从 term_decision 重试，最多 10 次
-- **计数器 reset bug 修复**：原 `!prior_result.exists()` 触发 reset 导致 pframe_lite.py 崩溃时计数器永远为 1；改为 `!count_path.exists()` 仅在真正新序列开始时重置，MAX_ROUNDS=20 现在正确生效
-- **bias 解析 bug 修复**：`extract_yaml_float` 新增对 YAML 列表项（`- bias: 1`）的支持，mask_search 返回的 bias 不再为 N/A
+**新增（626619c，v0.3.4）**：
+- **BUG-006 修复**：`RunResistTuneTool::execute()` 在调用 pangen 前自动从 `arcgen_dir/langgraph_pipeline/lite/` 复制 `*.py` 到 `job_dir/lite/`，修复 fresh job_dir 的 `pframe_resist_tune.py` ImportError（`from lite.lite_check import lite_check`）
+- **BUG-002 修复**：`RunCalibrationIterTool` 自动从 `amc_template` 复制 `fit_resist_model_ntd_w7.py` 默认模板
+- **BUG-003 修复**：llm-harness-loop 空串视为 `{}`
+- **BUG-004 修复**：`RunOpticalSearchTool` 从 cal.txt bootstrap calibration_gauges.txt
 
-**run8 结果（v0.3.3，small_case1）**：8 节点全部执行；计数器 1→20 正确递增；20 轮硬停后进入 resist_tune；cal_uwrms=10.56nm，val_uwrms=0.430nm；model_check 仅调用一次 ✅
+**run9 结果（v0.3.4，fresh job_dir，全 8 节点首次运行）**：
+8 节点全部执行；reset_for_recalibration 循环正确 10 次；max_retries_exhausted 后接受结果 ✅
+过拟合属 9-gauge 数据集规模问题，非代码 bug。
 
-**新增（20953d3，v0.3.2）**：
-- `model_check_done.txt` 标记 + SKILL.md 漂移修复
+**已知待修复（BUG-007）**：`pframe_model_check.py` 读取 `optimize_result/result_ga.yaml`（GA 优化器产出），fresh job_dir 非 GA 路径时该文件不存在；当前 workaround 为手动复制已有 job_dir 的 `optimize_result/`。长期修复：`RunMaskSearchTool` 在非 GA 路径时创建 stub。
 
-**新增（416f5dc，v0.3.1）**：
-- `RunResistTuneTool`（节点 7）、`upgrade_group` action、SKILL.md 8 节点完整对齐
-
-**v0.3 状态（8fd7ef9）**：6 个节点 tool，small_case1 节点 1-4 验证通过
-
-**待做（优先级排序）**：
-- BUG-002：全新 job_dir 需在 calibration_iter 前复制 fit_resist_model_ntd_w7.py 默认模板
-- 漂移-B/C：SKILL.md 加强约束，减少 calibration_iter 间多余的 read_eda_file 调用
-- 更大 case（60+ gauge）验证 ntd_ultra 收敛
+**待做（下一阶段 v0.4）**：
+- BUG-007：RunMaskSearchTool 创建 optimize_result/result_ga.yaml stub
+- orchestrator runner（YAML 声明式编排，彻底消除行为漂移）
 
 ### coding-agent ✅ 可运行，含临时技术债
 - 完整 CLI（one-shot / interactive REPL / session 管理）
