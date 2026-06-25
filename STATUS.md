@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-25（eda-agent v0.3.4：run9 fresh job_dir 全流程验证通过，BUG-006 修复）
+> 最后更新：2026-06-25（eda-agent v0.3.4：BUG-006 + BUG-007 修复，fresh job_dir 全流程无需手动干预）
 
 ---
 
@@ -74,23 +74,21 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.3.4 run9 fresh job_dir 全流程验证通过（2026-06-25）
+### eda-agent ✅ v0.3.4 BUG-006 + BUG-007 修复，fresh job_dir 全流程无需手动干预（2026-06-25）
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
 
-**新增（626619c，v0.3.4）**：
-- **BUG-006 修复**：`RunResistTuneTool::execute()` 在调用 pangen 前自动从 `arcgen_dir/langgraph_pipeline/lite/` 复制 `*.py` 到 `job_dir/lite/`，修复 fresh job_dir 的 `pframe_resist_tune.py` ImportError（`from lite.lite_check import lite_check`）
-- **BUG-002 修复**：`RunCalibrationIterTool` 自动从 `amc_template` 复制 `fit_resist_model_ntd_w7.py` 默认模板
-- **BUG-003 修复**：llm-harness-loop 空串视为 `{}`
-- **BUG-004 修复**：`RunOpticalSearchTool` 从 cal.txt bootstrap calibration_gauges.txt
+**新增（966bb8a，v0.3.4）**：
+- **BUG-007 修复**：`RunMaskSearchTool::ensure_optimize_result()` 在 done marker 写入时自动创建 `optimize_result/result_ga.yaml`（minimal YAML，`optimize_0` key）和 symlink `optimize_result/result_0_0/` → 实际 mask_search 结果目录，修复 `pframe_model_check.py` 的 `FileNotFoundError`
+- **BUG-006 修复**：`RunResistTuneTool` 自动从 `arcgen_dir/langgraph_pipeline/lite/` 复制 `*.py` 到 `job_dir/lite/`，修复 fresh job_dir 的 ImportError
 
 **run9 结果（v0.3.4，fresh job_dir，全 8 节点首次运行）**：
 8 节点全部执行；reset_for_recalibration 循环正确 10 次；max_retries_exhausted 后接受结果 ✅
 过拟合属 9-gauge 数据集规模问题，非代码 bug。
 
-**已知待修复（BUG-007）**：`pframe_model_check.py` 读取 `optimize_result/result_ga.yaml`（GA 优化器产出），fresh job_dir 非 GA 路径时该文件不存在；当前 workaround 为手动复制已有 job_dir 的 `optimize_result/`。长期修复：`RunMaskSearchTool` 在非 GA 路径时创建 stub。
+**已知待修复**：
+- BUG-005（wizard.json 5个 pages 结构）：新 job_dir 需从已知好的 job_dir 复制 wizard.json
 
 **待做（下一阶段 v0.4）**：
-- BUG-007：RunMaskSearchTool 创建 optimize_result/result_ga.yaml stub
 - orchestrator runner（YAML 声明式编排，彻底消除行为漂移）
 
 ### coding-agent ✅ 可运行，含临时技术债
