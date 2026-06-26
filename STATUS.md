@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-26（eda-agent v0.4.1：term_selection_lite 统一节点，对齐 ArcGen 最新 AMC lite）
+> 最后更新：2026-06-26（eda-agent v0.4.2：Phase 2 robustness + info nodes — LLM 重试、calibration_report、gauge_error_attribution 骨架）
 
 ---
 
@@ -74,7 +74,7 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.4 orchestrator — Pipeline 流程与 ArcGen 对齐验证通过（2026-06-26）
+### eda-agent ✅ v0.4.2 orchestrator — Pipeline 流程与 ArcGen AMC lite 对齐（Phase 2 部分完成）
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
 
 **v0.4 E2E v18 验证结果（2026-06-26，fresh job_dir 从零开始）**：
@@ -91,12 +91,14 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 - pipeline.yaml 11 stages 声明式流程
 - `cargo build` 零错误，`cargo test` 11/11 通过
 
-**与 ArcGen 流程对齐状态**：
-- ✅ 8 节点主流程
-- ✅ route_should_gridparam 条件跳过
-- ✅ model_check_feedback → execute_restart 多目标回流
-- ✅ calibration_iter loop (max 20) → loop_exhausted → resist_tune
-- ⚠️ quality 门 / validate_pre：行为等价，结构差异保留（见 ARCGEN_ALIGNMENT_GAPS.md）
+**与 ArcGen AMC lite 流程对齐状态**：
+- ✅ term_selection_lite 统一节点（Phase 1，合并旧 term_decision + calibration_iter + resist_tune）
+- ✅ 10 stage pipeline（findoptics → optical → gridparam → mask → term_selection_lite → model_check → calibration_report → success）
+- ✅ execute_restart 多目标回流（对齐 ArcGen route_after_restart）
+- ✅ model_check A~G 检查 + feedback + gauge_error_attribution 骨架
+- ✅ calibration_report 终节点（生成 calibration_report.md）
+- ✅ LLM 调用重试 [10,30,60]s（对齐 ArcGen _LLM_RETRY_DELAYS）
+- ⚠️ LLM quality gate 2 层 / result_analysis 节点：未实现（Phase 2 剩余，见 ARCGEN_LITE_ALIGNMENT.md）
 
 **待做（P1，后续）**：数据处理阶段节点（data_clean 等）、LLM 调用重试（指数退避）、删除 SKILL.md/agent.rs
 
