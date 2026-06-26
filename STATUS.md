@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-26（eda-agent v0.4：E2E v18 完整 8 节点流程 + 回流验证通过；BUG-A008~A012 修复）
+> 最后更新：2026-06-26（eda-agent v0.4.1：term_selection_lite 统一节点，对齐 ArcGen 最新 AMC lite）
 
 ---
 
