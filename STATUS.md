@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-26（eda-agent v0.4.3：Phase 2 完成 — LLM quality gate 2 层 + result_analysis 节点，pipeline 14 stages）
+> 最后更新：2026-06-26（eda-agent v0.4.4：E2E v20 验证通过 — 14 stage pipeline + 回流机制，BUG-A013/A014 修复）
 
 ---
 
@@ -74,7 +74,7 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.4.3 orchestrator — Pipeline 流程与 ArcGen AMC lite 对齐（Phase 2 完成）
+### eda-agent ✅ v0.4.4 orchestrator — 14 stage pipeline E2E 验证通过（对齐 ArcGen AMC lite）
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
 
 **v0.4 E2E v18 验证结果（2026-06-26，fresh job_dir 从零开始）**：
