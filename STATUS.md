@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-26（eda-agent v0.4：ArcGen 对齐 — model_check_feedback + execute_restart）
+> 最后更新：2026-06-26（eda-agent v0.4：E2E v18 完整 8 节点流程 + 回流验证通过；BUG-A008~A012 修复）
 
 ---
 
@@ -74,26 +74,31 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.4 orchestrator 开发完成并 E2E 验证通过（2026-06-26）
+### eda-agent ✅ v0.4 orchestrator — Pipeline 流程与 ArcGen 对齐验证通过（2026-06-26）
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
 
-**新增（05f8b85，v0.3.4）**：
-- **BUG-005 修复**：新增 `--wizard-template <path>` CLI 参数；`RunFindOpticsTool` 在首次执行前调用 `init_wizard_json()`，自动从模板复制 wizard.json 并 patch `pages[1].data.gds.gauge` + MG.Submit 字段
-- **BUG-007 修复**：`ensure_optimize_result()` 自动创建 `optimize_result/result_ga.yaml` stub + symlink
-- **BUG-006 修复**：`RunResistTuneTool` 自动复制 `lite/*.py` 到 `job_dir/lite/`
+**v0.4 E2E v18 验证结果（2026-06-26，fresh job_dir 从零开始）**：
+- 完整 8 节点流程全部跑通：findoptics → optical → gridparam(跳过) → mask → term_decision → calibration_iter(20轮) → resist_tune → model_check
+- 回流机制验证：model_check FAIL → execute_restart → term_decision → calibration_iter（对齐 ArcGen）
+- BUG-A008~A012 全部修复（calibration_iter mixed agent+tool、lite/ 复制、val.txt 自动复制、gridparam 条件跳过、.src 文件复制）
+- val_uwrms 不再为 0（BUG-A010 修复生效），resist_tune cal=0.025 val=0.399
 
-**run9 结果（v0.3.4，fresh job_dir，全 8 节点首次运行）**：8 节点全部执行；10 次 reset 循环正确；max_retries_exhausted 后接受结果 ✅
-
-**v0.4 已完成（2026-06-26）**：
+**v0.4 架构**：
 - Rust 声明式 YAML orchestrator 替换 LLM ReAct 流程控制，LLM 仅在 term_decision + calibration_iter 介入
-- 节点逻辑抽离为独立 `async fn`（src/tools/nodes/，~2688 行）
-- orchestrator 核心（config/context/executor/runner，~530 行）
-- model_check A~G 七项检查补齐（对齐 ArcGen）
+- 节点逻辑抽离为独立 `async fn`（src/tools/nodes/）
+- orchestrator 核心（config/context/executor/runner）
+- model_check A~G 七项检查 + feedback 多目标回流（对齐 ArcGen）
 - pipeline.yaml 11 stages 声明式流程
-- E2E 验证通过（run9 job_dir 复跑，与基准一致）
 - `cargo build` 零错误，`cargo test` 11/11 通过
 
-**待做（P1，后续）**：数据处理阶段节点（data_clean 等）、删除 SKILL.md/agent.rs（orchestrator 稳定后）
+**与 ArcGen 流程对齐状态**：
+- ✅ 8 节点主流程
+- ✅ route_should_gridparam 条件跳过
+- ✅ model_check_feedback → execute_restart 多目标回流
+- ✅ calibration_iter loop (max 20) → loop_exhausted → resist_tune
+- ⚠️ quality 门 / validate_pre：行为等价，结构差异保留（见 ARCGEN_ALIGNMENT_GAPS.md）
+
+**待做（P1，后续）**：数据处理阶段节点（data_clean 等）、LLM 调用重试（指数退避）、删除 SKILL.md/agent.rs
 
 ### coding-agent ✅ 可运行，含临时技术债
 - 完整 CLI（one-shot / interactive REPL / session 管理）
