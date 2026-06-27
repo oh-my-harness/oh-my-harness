@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-27（eda-agent v0.4.5：E2E v20i pipeline success — 14 stage 完整跑通，3 个 BUG 修复）
+> 最后更新：2026-06-27（eda-agent v0.4.6：AMC lite 对齐 Phase A/C/D — 22 stage pipeline，resist_quality + route_findoptics + validate_pre）
 
 ---
 
@@ -74,7 +74,7 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.4.5 orchestrator — 14 stage pipeline E2E 完整跑通（对齐 ArcGen AMC lite）
+### eda-agent ✅ v0.4.6 orchestrator — 22 stage pipeline（对齐 ArcGen AMC lite，Phase A/C/D 完成）
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
 
 **v0.4 E2E v18 验证结果（2026-06-26，fresh job_dir 从零开始）**：
@@ -93,7 +93,12 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **与 ArcGen AMC lite 流程对齐状态**：
 - ✅ term_selection_lite 统一节点（Phase 1，合并旧 term_decision + calibration_iter + resist_tune）
-- ✅ 14 stage pipeline（findoptics → optical → optical_quality_llm → optical_result_analysis → gridparam → mask → mask_quality_llm → mask_result_analysis → term_selection_lite → model_check → calibration_report → success）
+- ✅ 22 stage pipeline（route_findoptics + validate_pre×5 + resist_quality + resist_quality_llm 新增，对齐 ArcGen 5 类差异）
+- ✅ Phase A: resist_quality + resist_quality_llm（退化检查 >0.5nm FAIL / >0.1nm WARNING）
+- ✅ Phase C: route_findoptics 条件跳过（optics_search_engine == vizier）
+- ✅ Phase D: validate_pre 节点×5（L1 文件 + L2 结构/物理量范围检查）
+- ⏸️ Phase B: gauge_error_attribution LLM 归因（当前 skeleton）
+- ⏸️ Phase E: 数据处理前置 7 节点（暂缓，设计差异）
 - ✅ execute_restart 多目标回流（对齐 ArcGen route_after_restart）
 - ✅ model_check A~G 检查 + feedback + gauge_error_attribution 骨架
 - ✅ calibration_report 终节点（生成 calibration_report.md）
