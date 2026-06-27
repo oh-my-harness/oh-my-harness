@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-27（eda-agent v0.5.1：Phase B+E 完成 — 36 stage pipeline 全流程对齐 ArcGen AMC lite）
+> 最后更新：2026-06-27（eda-agent v0.5.2：BUG-A018 修复 — gauge_error_attribution prompt 变量从文件补充，E2E v24 验证通过）
 
 ---
 
