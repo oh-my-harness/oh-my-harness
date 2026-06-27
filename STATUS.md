@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-27（eda-agent v0.5.2：BUG-A018 修复 — gauge_error_attribution prompt 变量从文件补充，E2E v24 验证通过）
+> 最后更新：2026-06-28（eda-agent v0.5.3：BUG-A023 修复 — model_check F/G 特殊处理 + MAX_RETRIES 验证，E2E 全流程跑通 success）
 
 ---
 
@@ -74,7 +74,9 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.5.1 orchestrator — 36 stage pipeline（Phase B+E 完成，全流程对齐 ArcGen AMC lite）
+### eda-agent ✅ v0.5.3 orchestrator — 36 stage pipeline（全流程 E2E 跑通 success，对齐 ArcGen AMC lite）
+
+**E2E 验证**：2026-06-28 全流程跑通 `pipeline success`，36 stages 全部通过，model_check retry 循环正确终止。
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
 
 **v0.4 E2E v18 验证结果（2026-06-26，fresh job_dir 从零开始）**：

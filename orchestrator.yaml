@@ -1,0 +1,503 @@
+# CAD 后端编程智能体编排器配置文件
+# Orchestrator Configuration for CAD Backend Agent
+
+# Agent bridge 配置
+agent:
+  codex_path: "codex"
+  profile: "default"
+  sandbox_mode: "danger-full-access"
+  approval_policy: "never"
+  node_path: "node"
+  bridge_script: ".claude/orchestrator/node_bridge/bridge.js"
+  startup_timeout_seconds: 10.0
+  response_timeout_buffer_seconds: 5.0
+  skip_git_repo_check: true
+
+profiles:
+  default:
+    model: "gpt-5.4"
+  router:
+    model: "gpt-5.1-codex-mini"
+
+# 目录配置
+directories:
+  working_dir: "../.."                                                            # 工作目录
+  input_dir: "ccinput"                                                        # 输入目录
+  output_dir: "ccoutput"                                                      # 输出目录
+  state_dir: ".claude/orchestrator/state/workflow"                            # 工作流状态持久化目录
+  logs_dir: ".claude/orchestrator/logs"                                       # 日志目录
+
+# 阶段定义 - 定义工作流的各个阶段
+stages:
+  # 阶段 1: 分析特征依赖
+  - name: analyze_dependencies
+    type: agent
+    agent: feature_dependency_analyze
+    prompt: |
+      使用 feature_dependency_analyze agent 分析 {feature_name} 特征的依赖。
+
+      该 agent 会：
+      1. 递归构建完整的依赖树
+      2. 识别 GeometricUtilities、Features 等 NXOpen 类型
+      3. 输出 dependency_graph.json 到 ccoutput/{feature_name}/dependencies/ 目录
+    timeout: 3000
+    next_on_success: setup_dependencies
+    next_on_failure: failed
+    retry:
+      enabled: true
+      max_retries: 2
+
+  # 阶段 2: 初始化依赖数据（Python脚本阶段）
+  # 从 dependency_graph.json 提取 GeometricUtilities 依赖类，写入 ccoutput/{feature_name}/dependencies/ 目录
+  - name: setup_dependencies
+    type: python
+    script: .claude/scripts/setup_geometry_utilities_dependencies.py
+    timeout: 60
+    next_on_success: handle_dependencies
+    next_on_failure: failed
+
+  # 阶段 3: 处理依赖循环（Python脚本阶段）
+  # 检查是否还有待生成的依赖类，决定下一步跳转
+  # - 有依赖：退出码0，跳转到 generate_dependencies（继续循环）
+  # - 无依赖：退出码1，跳转到 success（退出循环）
+  - name: handle_dependencies
+    type: python
+    script: .claude/scripts/handle_geometry_utilities_dependencies.py
+    timeout: 60
+    next_on_success: generate_dependencies
+    next_on_failure: analyze_feature
+    # 注意：此阶段不需要 loop 配置，它本身是循环控制点
+
+  # 阶段 4: 分析当前依赖类（GeometryUtilities）
+  - name: generate_dependencies
+    type: agent
+    agent: geometry_utilities_analyze
+    prompt: |
+      使用 geometry_utilities_analyze agent 分析当前依赖类。
+
+      注意：从 ccoutput/{feature_name}/dependencies/dependency_geometry_utilities.json 文件中读取 current_dependency 字段，
+      获取当前需要分析的 GeometricUtilities 类名，然后分析该类。
+
+      从 NXOpen_Headers/GeometricUtilities/ 目录读取头文件，
+      搜索 PowerCAD 中的对应实现，生成设计文档。
+    timeout: 3000
+    next_on_success: implement_dependencies
+    next_on_failure: failed
+    retry:
+      enabled: true
+      max_retries: 2
+
+  # 阶段 5: 实现当前依赖类
+  - name: implement_dependencies
+    type: agent
+    agent: geometry_utilities_implement
+    prompt: |
+      使用 geometry_utilities_implement agent 实现当前依赖类。
+
+      注意：从 ccoutput/{feature_name}/dependencies/dependency_geometry_utilities.json 文件中读取 current_dependency 字段，
+      获取当前需要实现的 GeometricUtilities 类名，然后实现该类。
+
+      读取设计文档，生成完整的 C++ 代码文件。
+    timeout: 3000
+    next_on_success: handle_dependencies
+    next_on_failure: failed
+    next_on_loop_exhausted: failed
+    retry:
+      enabled: true
+      max_retries: 2
+    loop:
+      enabled: true
+      when: success
+      max_iterations: 100
+      target_stage: handle_dependencies
+
+  # 阶段 1: 分析特征需求，生成实施计划
+  - name: analyze_feature
+    type: agent                     # 阶段类型: agent
+    agent: analyze_feature          # Agent 名称
+    prompt: |
+      使用 analyze_feature agent 分析 {feature_name} 功能需求并生成实现计划。
+
+      如果之前的计划被拒绝，请根据反馈重新规划。
+    timeout: 5400                   # 超时时间（秒）
+    next_on_success: review_plan    # 成功后跳转到审查计划阶段
+    next_on_failure: failed         # 失败后跳转到的阶段
+    inject_errors: true             # 是否注入上次错误信息
+    error_context_keys:             # 错误上下文的键名（支持多个）
+      - check_result                # 代码检查错误
+      - plan_rejection_reason       # 用户拒绝原因
+    retry:
+      enabled: true                 # 启用重试
+      max_retries: 2                # 最大重试次数
+    validation:
+      forbidden_patterns:
+        - "TODO"
+        - "待实现"
+
+  # 阶段 1.5: 审查实施计划
+  - name: review_plan
+    type: agent                     # 阶段类型: agent
+    agent: review_plan              # Agent 名称
+    prompt: |
+      使用 review_plan agent 审查并完善 {feature_name} 功能的实施计划。
+
+      确保 plan.md 中的所有内容都已完整规划，没有遗留的 TODO 或待完成项。
+    timeout: 5400                   # 超时时间（秒）
+    next_on_success: implement_feature    # 成功后跳转到用户确认阶段
+    next_on_failure: failed         # 失败后标记流程失败
+    inject_errors: true             # 是否注入上次错误信息
+    error_context_keys:
+      - plan_rejection_reason       # 计划审查问题原因
+    retry:
+      enabled: true                 # 启用重试
+      max_retries: 2                # 最大重试次数
+    validation:
+      forbidden_patterns:
+        - "TODO"
+        - "待实现"
+        - "TBD"
+        - "待定"
+
+  # 阶段 2: 根据计划实现代码
+  - name: implement_feature
+    type: agent
+    agent: implement_feature
+    prompt: |
+      功能: {feature_name}
+
+      使用 implement_feature agent，根据 plan.md 中的实施计划实现该功能。生成生产就绪的 CAD C++ 代码（.h 和 .cpp 文件）。
+    timeout: 5400
+    next_on_success: review_code
+    next_on_failure: failed
+    inject_errors: true             # 注入检查错误以便修复
+    error_context_keys:
+      - review_result
+    retry:
+      enabled: true
+      max_retries: 2
+    validation:
+      forbidden_patterns:
+        - "// TODO"
+
+  # 阶段 3: 代码审查和修复
+  - name: review_code
+    type: agent
+    agent: review_code
+    prompt: |
+      使用 review_code agent 审查并修复 {feature_name} 功能的 C++ 代码实现。
+
+      确保代码符合 NXOpen 对齐标准，修复任何正确性问题并生成审查报告。
+    timeout: 5400
+    next_on_success: check_and_fix
+    next_on_failure: failed
+    inject_errors: true
+    error_context_keys:
+      - review_result
+    retry:
+      enabled: true
+      max_retries: 2
+
+  # 阶段 4: 代码检查和修复（验收门禁）
+  - name: check_and_fix
+    type: agent
+    agent: check_and_fix
+    prompt: |
+      使用 check_and_fix agent 对 {feature_name} 功能进行静态分析。
+
+      运行 cad-checker 生成错误报告，读取报告并修复代码问题。迭代直到没有错误（最多7次）。
+    timeout: 5400
+    next_on_success: check
+    next_on_failure: failed
+    retry:
+      enabled: true
+      max_retries: 3
+
+  # 阶段 5: 代码检查（验收门禁）
+  - name: check
+    type: local_checker             # 阶段类型: local_checker (本地检查工具)
+    tool: cad-checker               # 工具名称
+    timeout: 600
+    min_severity: error             # 最小严重级别
+    output_format: json             # 输出格式
+    next_on_success: open_feature_header        # 检查通过，流程成功
+    next_on_failure: failed               # 非循环失败统一终止
+    next_on_loop_exhausted: failed
+    retry:
+      enabled: false                # 检查阶段不重试
+    loop:
+      enabled: true                 # 启用循环（检查-修复循环）
+      max_iterations: 7             # 最大循环次数
+      target_stage: check_and_fix   # 循环回到 check_and_fix 阶段
+    validation:
+      pass_criteria:
+        max_errors: 0               # 通过标准：0 个错误
+
+  # ── 阶段6.1：生成 PWOpen 头文件 ──────────────────────────────────────────────────
+  - name: open_feature_header
+    type: agent
+    agent: open_feature_header_file
+    prompt: |
+      使用 open_feature_header_file agent 为 {feature_name} 生成 Open 层头文件。
+      CAD仓库路径: PowerCAD/: PowerCAD
+
+      Open层头文件输出路径：
+      - 公共头文件 → PowerCAD/OPEN/source/Features/headers/PWOpen/
+
+      重要：即使头文件已存在，也必须重新生成。
+    timeout: 600
+    next_on_success: success
+    next_on_failure: failed
+    inject_errors: false
+    retry:
+      enabled: true
+      max_retries: 2
+    validation:
+      forbidden_patterns:
+        - "// TODO"
+
+  # ── 阶段6.2：实现 Impl 类 ────────────────────────────────────────────────────────
+  - name: open_impl
+    type: agent
+    agent: open_feature_impl
+    prompt: |
+      使用 open_feature_impl agent 实现 {feature_name} 的 FeatureImpl 类。
+      CAD仓库路径: PowerCAD/: PowerCAD
+
+      输出路径：PowerCAD/OPEN/source/Features/src/internal/
+
+      重要：即使文件已存在，也必须重新生成。
+    timeout: 600
+    next_on_success: open_builder_impl
+    next_on_failure: failed
+    inject_errors: false
+    retry:
+      enabled: true
+      max_retries: 2
+    validation:
+      forbidden_patterns:
+        - "// TODO"
+
+  # ── 阶段6.3：实现 BuilderImpl 类 ────────────────────────────────────────────────
+  - name: open_builder_impl
+    type: agent
+    agent: open_feature_builder_impl
+    prompt: |
+      使用 open_feature_builder_impl agent 实现 {feature_name} 的 BuilderImpl 类。
+      CAD仓库路径: PowerCAD/: PowerCAD
+
+      输出路径：PowerCAD/OPEN/source/Features/src/internal/
+
+      重要：即使文件已存在，也必须重新生成。
+    timeout: 600
+    next_on_success: open__builder
+    next_on_failure: failed
+    inject_errors: false
+    retry:
+      enabled: true
+      max_retries: 2
+    validation:
+      forbidden_patterns:
+        - "// TODO"
+
+  # ── 阶段6.4：实现 _Builder 类 ────────────────────────────────────────────────────
+  - name: open__builder
+    type: agent
+    agent: open_feature__builder
+    prompt: |
+      使用 open_feature__builder agent 实现 {feature_name} 的内部 _Builder 类。
+      CAD仓库路径: PowerCAD/: PowerCAD
+
+      输出路径：PowerCAD/OPEN/source/Features/src/internal/
+
+      重要：即使文件已存在，也必须重新生成。
+    timeout: 600
+    next_on_success: open__builder_builder
+    next_on_failure: failed
+    inject_errors: false
+    retry:
+      enabled: true
+      max_retries: 2
+    validation:
+      forbidden_patterns:
+        - "// TODO"
+
+  # ── 阶段6.5：实现 _BuilderBuilder 类 ────────────────────────────────────────────
+  - name: open__builder_builder
+    type: agent
+    agent: open_feature__builder_builder
+    prompt: |
+      使用 open_feature__builder_builder agent 实现 {feature_name} 的内部 _BuilderBuilder 类。
+      CAD仓库路径: PowerCAD/: PowerCAD
+
+      输出路径：PowerCAD/OPEN/source/Features/src/internal/
+
+      重要：即使文件已存在，也必须重新生成。
+    timeout: 600
+    next_on_success: open_public_source
+    next_on_failure: failed
+    inject_errors: false
+    retry:
+      enabled: true
+      max_retries: 2
+    validation:
+      forbidden_patterns:
+        - "// TODO"
+
+  # ── 阶段6.6：实现公共源文件 ──────────────────────────────────────────────────────
+  - name: open_public_source
+    type: agent
+    agent: open_feature_public_source
+    prompt: |
+      使用 open_feature_public_source agent 实现 {feature_name} 的公共源文件。
+      CAD仓库路径: PowerCAD/: PowerCAD
+
+      输出路径：PowerCAD/OPEN/source/Features/src/
+
+      重要：即使文件已存在，也必须重新生成。
+    timeout: 600
+    next_on_success: open_feature_create_builder_function
+    next_on_failure: failed
+    inject_errors: false
+    retry:
+      enabled: true
+      max_retries: 2
+    validation:
+      forbidden_patterns:
+        - "// TODO"
+
+  # ── 阶段6.7：实现特征创建的Builder函数 ──────────────────────────────────────────
+  - name: open_feature_create_builder_function
+    type: agent
+    agent: open_feature_create_builder_function
+    prompt: |
+      使用 为Open层的BaseFeatureCollection或FeatureCollection添加创建Builder的函数。参考NXOpen中的Create*Builder函数，NX中有哪个类的函数就在PW对应的类中添加。
+      CAD仓库路径: PowerCAD/: PowerCAD
+    timeout: 600
+    next_on_success: build_open
+    next_on_failure: failed
+    inject_errors: false
+    retry:
+      enabled: true
+      max_retries: 2
+    validation:
+      forbidden_patterns:
+        - "// TODO"
+
+  # 阶段 6: Open 层编译验证
+  - name: build_open
+    type: agent
+    agent: build_powercad_debug
+    prompt: |
+      使用 build_powercad_debug agent 编译 PowerCAD 项目。
+
+      如果上次构建失败，错误信息如下：
+      {build_open_error}
+    timeout: 1200
+    next_on_success: test_open
+    next_on_failure: failed
+    next_on_loop_exhausted: failed
+    inject_errors: true
+    error_context_keys:
+      - build_open_error
+    retry:
+      enabled: false
+    loop:
+      enabled: true
+      max_iterations: 3
+      target_stage: open_impl
+
+  # 阶段 7: 集成测试与 XT 文件比对
+  - name: test_open
+    type: agent
+    agent: test_implement_feature
+    prompt: |
+      使用 test_implement_feature agent 对 {feature_name} 的 Open 层封装进行集成测试。
+      CAD仓库路径: PowerCAD
+
+      步骤：
+      1. 扫描 PowerCAD/ccinput/{feature_name}/Test/ 目录，收集所有测试用例（.cpp 文件）
+      2. 拷贝测试文件到 PowerCAD/OPEN/test/，编译项目
+      3. 运行测试可执行文件（在 PowerCAD/.output/Debug/PWBIN/），收集生成的 XT 文件
+      4. 对生成的 XT 文件，与 PowerCAD/ccinput/{feature_name}/Test/ 子目录中的 NX 参考 XT 文件进行比对（调用 test_xt_feature agent）
+      5. 生成测试报告至 ccoutput/{feature_name}/Test/结果文档.md
+      6. 输出综合正确率（通过用例数 / 总用例数）
+
+      判定标准：
+      - 综合正确率 ≥ 100% → 测试通过（next_on_success）
+      - 综合正确率 < 100% → 测试失败，回退到分析阶段（next_on_failure）
+
+      如果上次测试失败，失败原因如下：
+      {test_failure_report}
+    timeout: 1800
+    next_on_success: success
+    next_on_failure: failed
+    next_on_loop_exhausted: failed
+    inject_errors: true
+    error_context_keys:
+      - test_failure_report
+    retry:
+      enabled: false
+    loop:
+      enabled: true
+      max_iterations: 2
+      target_stage: analyze_test_report
+    validation:
+      forbidden_patterns:
+        - "需要您的批准"
+        - "请批准后"
+        - "请批准"
+        - "请授权"
+        - "需要写入权限"
+        - "need your approval"
+        - "requires your approval"
+        - "please approve"
+        - "permission denied"
+
+  # 阶段 8: 分析测试报告
+  - name: analyze_test_report
+    type: agent
+    agent: analyze_test_report
+    prompt: |
+      分析 测试报告：ccoutput/{feature_name}/Test/结果文档.md
+
+      如果测试报告种包含xt文件对比失败，则测试通过（next_on_success）
+      其余情况则失败（next_on_failure）
+    timeout: 1800
+    next_on_success: success
+    next_on_failure: failed
+    next_on_loop_exhausted: failed
+    inject_errors: true
+    error_context_keys:
+      - test_failure_report
+    retry:
+      enabled: false
+    loop:
+      enabled: true
+      max_iterations: 2
+      target_stage: analyze_feature
+    validation:
+      forbidden_patterns:
+        - "需要您的批准"
+        - "请批准后"
+        - "请批准"
+        - "请授权"
+        - "需要写入权限"
+        - "need your approval"
+        - "requires your approval"
+        - "please approve"
+        - "permission denied"
+
+# 扩展功能配置
+extensions:
+  snapshot:
+    enabled: true
+    auto_snapshot: true
+    snapshot_dir: ".claude/orchestrator/snapshots"
+  hooks:
+    enabled: true
+
+# 日志配置
+logging:
+  level: "INFO"
+  file: ".claude/orchestrator/logs/orchestrator.log"
+  console: true
