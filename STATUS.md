@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-27（eda-agent v0.5.0：Phase E 数据准备 7 节点 — 35 stage pipeline 全流程对齐）
+> 最后更新：2026-06-27（eda-agent v0.5.1：Phase B+E 完成 — 36 stage pipeline 全流程对齐 ArcGen AMC lite）
 
 ---
 
@@ -74,7 +74,7 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.5.0 orchestrator — 35 stage pipeline（Phase E 数据准备，全流程对齐 ArcGen）
+### eda-agent ✅ v0.5.1 orchestrator — 36 stage pipeline（Phase B+E 完成，全流程对齐 ArcGen AMC lite）
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
 
 **v0.4 E2E v18 验证结果（2026-06-26，fresh job_dir 从零开始）**：
