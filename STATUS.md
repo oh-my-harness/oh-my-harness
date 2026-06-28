@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-28（eda-agent v0.5.3：BUG-A023 修复 — model_check F/G 特殊处理 + MAX_RETRIES 验证，E2E 全流程跑通 success）
+> 最后更新：2026-06-28（eda-agent v0.5.4：R-08 beam search 集成 — K=3 并发候选，单候选 fallback 验证通过；A024 ArcGen beam 参考不存在，A025 PanGen grid_check stall）
 
 ---
 
@@ -74,7 +74,9 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.5.3 orchestrator — 36 stage pipeline（全流程 E2E 跑通 success，对齐 ArcGen AMC lite）
+### eda-agent ✅ v0.5.4 orchestrator — 36 stage pipeline（全流程 E2E 跑通 success，对齐 ArcGen AMC lite）
+
+**v0.5.4 (2026-06-28)**：R-08 beam search 集成。term_selection_lite 支持 K=3 并发候选（run_beam_round），LLM 返回 {candidates:[...]} 时触发，否则 fallback 单候选。提取 finalize_round 共享状态逻辑。E2E 回归：22 节点 + 12 轮 term_selection 通过，无回归。发现 A024（ArcGen 无 beam_runner/lite 代码，beam 为 eda-agent 自有增强）+ A025（PanGen grid_check worker stall，非 pipeline bug）。
 
 **E2E 验证**：2026-06-28 全流程跑通 `pipeline success`，36 stages 全部通过，model_check retry 循环正确终止。
 针对 EDA 仿真软件内部 AMC 光刻模型校准流水线的专用 Agent。
