@@ -74,7 +74,7 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.5.5 orchestrator — 36 stage pipeline（全流程 E2E 跑通 success，对齐 ArcGen AMC lite）
+### eda-agent ✅ v0.5.6 orchestrator — 36 stage pipeline（全流程 E2E 跑通 success，对齐 ArcGen AMC lite）
 
 **v0.5.5 (2026-06-29)**：A026 修复 — beam 分支从 action 检查内部移到外部。
 E2E 全流程验证通过：11 轮 K=3 并发 beam search，每轮 3 候选并发 PanGen → pick_winner →
