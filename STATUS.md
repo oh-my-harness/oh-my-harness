@@ -178,3 +178,21 @@ llm_adapter = { path = "../llm-api-adapter" }
 ```
 
 `llm-harness-core` 的 `llm_adapter` 依赖使用本地路径（`path = "../llm-api-adapter"`）。
+
+---
+
+## 2026-07-01 更新：runtime WorkflowContext + EDA 适配层
+
+### llm-harness-runtime
+- **WorkflowContext**（commit `9d5d442`，已合并 main）：共享可变 KV 黑板，等价 LangGraph State。executor 读写、judge 读、LLM step prompt 注入。随 WorkflowState 持久化，崩溃恢复保留。204 测试全绿。
+- **workflow issue 收尾**：12 个 issue 提到 GitHub（#22~#34），同事修复 8 个（#22~#24/#26~#27/#31~#33），我实现 #34（WorkflowContext）。4 个低优先级 OPEN。
+- **main 分支**：已 fast-forward 合并 workflow 分支（含 WorkflowContext + FFI SDK + final answer contract）。
+
+### eda-agent
+- **workflow_adapter 模块**（commit `4fb005f` / `42cae1f` / `8b7d51e`）：
+  - `converter`：pipeline.yaml → Workflow（stage → Step::Executor，routes → Edge）
+  - `executor`（EdaExecutor）：桥接 runtime StepExecutor → execute_stage，通过 WorkflowContext 传递 StageContext.variables
+  - `judge`（EdaJudge）：读 route_key → StageConfig::resolve_next → Transition
+  - CLI `--runtime` flag：用 WorkflowEngine 跑同一 pipeline.yaml，复用 TaskStore 持久化/事件流
+  - 2 个集成测试通过（mock executor 验证 context 共享 + route_key 路由）
+- **已知缺口**：EdaExecutor 已接入真实 execute_stage，但未在真实 job_dir 上 E2E 验证（需 PanGen 环境）。loop_counter 跨 step 持久化未实现（当前 loop 由 execute_stage 内部管理）。
