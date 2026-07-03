@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-06-29（eda-agent v0.5.5：A026 beam 分支嵌套 bug 修复 — beam search 全流程 E2E 验证通过，11 轮 K=3 并发 beam + pick_winner + rollback，pipeline success）
+> 最后更新：2026-07-03（eda-agent runtime E2E：GLM5.2 完整跑通 76 turns，编排机制生产可用验证通过）
 
 ---
 
@@ -207,3 +207,4 @@ llm_adapter = { path = "../llm-api-adapter" }
 - **Simple case E2E + BUG-RT01 修复**（commit `4bdabd9`）：用 small_case1 fresh job_dir 测试发现 BUG-RT01（`--runtime` 新建路径未注入 case_dir/case_name 到 WorkflowContext），修复后数据准备全通过。eda_test_fresh_v26 完整 38 stage 全流程跑通 → calibration_report.md 生成。PanGen SIGSEGV（small_case1 的 .src 文件）是环境问题非代码 bug。详见 `eda-agent/BUGS_RUNTIME_E2E.md`。
 - **BUG-RT02 修复**（commit `63a30e0`）：`prepare_job` 把 `.src`/`.oas`/`pool` 复制到 `job_dir/file/`（而非根目录）+ 重写 context 路径。修复后 PanGen 不再 SIGSEGV，能启动 TCC 计算。旧 orchestrator 也受此 bug 影响（从未在 fresh job_dir 跑通过 small_case1）。PanGen exit 1 是仿真器/数据层面问题。
 - **✅ 真实全流程 E2E 完整跑通**（commit `3e2a617`）：`eda_test_fresh_v26` 删除 done marker 后真实重跑，38 stage + 10 轮 model_check 回流 = 155 turns，最终 `calibration_report.md` 生成（cal_uwrms=0.0170）。编排机制全部验证通过：loop_counter 跨 step 持久化、回跳循环 ×10 轮、loop_counter 跨轮回零、max_steps 安全阀、done marker + TaskStore 并行。修复 4 个 BUG（RT01 case_dir 注入、RT02 file/ 目录复制、RT03 .oas 空文件、max_steps 100→500）。
+- **✅ GLM5.2 E2E 完整跑通**（2026-07-03，commit `19b1923`）：用 GLM5.2 替换 Claude（解决 LLM 网关余额耗尽问题），eda_test_fresh_v26 完整 38 stage + 10 轮 model_check 回流 = 76 turns，`calibration_report.md` 生成。编排机制全部验证通过：GLM5.2 作为 LLM 后端正常工作、done marker 跳过、WorkflowContext 变量传递、回跳循环 ×10 轮、PanGen 无崩溃。详见 `eda-agent/BUGS_RUNTIME_E2E.md`。
