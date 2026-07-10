@@ -209,3 +209,33 @@ llm_adapter = { path = "../llm-api-adapter" }
 - **✅ 真实全流程 E2E 完整跑通**（commit `3e2a617`）：`eda_test_fresh_v26` 删除 done marker 后真实重跑，38 stage + 10 轮 model_check 回流 = 155 turns，最终 `calibration_report.md` 生成（cal_uwrms=0.0170）。编排机制全部验证通过：loop_counter 跨 step 持久化、回跳循环 ×10 轮、loop_counter 跨轮回零、max_steps 安全阀、done marker + TaskStore 并行。修复 4 个 BUG（RT01 case_dir 注入、RT02 file/ 目录复制、RT03 .oas 空文件、max_steps 100→500）。
 - **✅ GLM5.2 E2E 完整跑通**（2026-07-03，commit `19b1923`）：用 GLM5.2 替换 Claude（解决 LLM 网关余额耗尽问题），eda_test_fresh_v26 完整 38 stage + 10 轮 model_check 回流 = 76 turns，`calibration_report.md` 生成。编排机制全部验证通过：GLM5.2 作为 LLM 后端正常工作、done marker 跳过、WorkflowContext 变量传递、回跳循环 ×10 轮、PanGen 无崩溃。详见 `eda-agent/BUGS_RUNTIME_E2E.md`。
 - **✅ resume-failed 实现并 E2E 验证**（2026-07-04，runtime commit `9c188c4` + eda-agent commit `0ec9aa8`）：runtime 的 `resume()` 现在接受 `Failed` 状态，重置为 `Paused` 后 `run()` 从 `current_step` 精确续跑。EDA Agent 的 `scan_for_resumable_task` 扩展为扫描 failed task，restore 后自动调 `resume()`。E2E 验证：12 步进度完整保留，从失败点 `run_findoptics` 续跑，不从头重放。对齐 LangGraph checkpoint 恢复语义。closes #36。
+
+
+### eda-agent-py 🔄 ArcGen 对齐进行中
+
+**Python 版 EDA Agent**：通过 FFI SDK 复用 runtime，对齐 ArcGen AMC lite pipeline。
+Rust 版（eda-agent）作为交叉验证。ArcGen 是对齐基准（源头）。
+
+**当前状态**（2026-07-10）：38 stage pipeline 全部节点已实现，38 测试通过。
+
+**本轮对齐修复**（ArcGen 源码逐节点对比）：
+
+- **term_selection.py**：添加 vault_path 解析（OBSIDIAN_VAULT_RELPATH + fallback）、save_experience case_info 从 wizard.json 提取、status 使用 check_report（最后循环值）、_finalize 使用 best_terms or current_terms
+- **calibration.py (resist_tune)**：添加 optical_result/mask_params 空值检查（对齐 ArcGen 优雅降级）
+- **model_check.py Check A~E**：全面对齐 ArcGen
+  - Check A：添加 val_uwrms 读取（validation/.calibratefiles）+ anchor_max_abs（gauge.txt anchor 行）+ 3 条标准全部检查
+  - Check B：使用 config.py 常量（3.0/5.0）替代错误的 lite_config（500.0），添加 ax_/bx_ 检查，包含所有 term
+  - Check C：从 lite/term_pool.json 读取边界（替代 wizard.json 错误源），fallback 到 autoterm yaml
+  - Check D：修复阈值 1.0/2.0 → 0.01/0.02（分数非百分比），FAIL → WARNING，添加 active_term_names 过滤
+  - Check E：实现完整曲率方向检查（numpy，AI vs RI 二阶导数不一致 > 20% → FAIL），替代 stub
+  - 添加 valcheck_enabled 逻辑 + _try_read_val_uwrms() + _read_anchor_max_abs() + _find_grid_txt model_path 检查
+- **optical.py**：_read_optical_ranges 添加 pages[1] fallback，_expand_optical_range 添加近边界扩展
+- **data_prep.py (gauge_check)**：从 ArcGen 移植完整结构（_read_gauge_rows + _compute_gauge_overall + _layout_parser.py），klayout 可用时执行几何检查
+- **验证对齐（无需修改）**：lite/beam_runner、lite/term_advisor_lite、lite/decision_cache、lite/effectiveness_check、lite/lite_check、mask_quality、data_clean
+
+**已知限制**：
+- FFI WorkflowEngine 未暴露（G1/G2/G3），Python 用 workflow_engine/ 镜像代替
+- FFI system_prompt 未支持（G4），workaround 拼到 prompt 前缀
+- klayout 未安装，gauge_check 几何检查 SKIPPED（非阻塞）
+- vizier 黑盒优化路径未实现（Rust 版也未实现，对齐）
+- 真实 PanGen E2E 未验证（mock 测试通过）
