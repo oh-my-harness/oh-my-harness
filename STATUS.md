@@ -217,6 +217,8 @@ llm_adapter = { path = "../llm-api-adapter" }
 Rust 版（eda-agent）作为交叉验证。ArcGen 是对齐基准（源头）。
 
 **当前状态**（2026-07-11）：38 stage pipeline 全部节点已实现，E2E 全流程跑通（success）。
+FFI WorkflowEngine 已暴露（G1/G2/G3 已修复），CLI 已迁移到 FFI 路径。
+FFI E2E 全流程跑通：33 步全部执行，pipeline succeeded。
 resist_tune → resist_quality → model_check → gauge_error_attribution →
 model_check_feedback → calibration_report 全部通过。
 
@@ -236,7 +238,7 @@ model_check_feedback → calibration_report 全部通过。
 - **验证对齐（无需修改）**：lite/beam_runner、lite/term_advisor_lite、lite/decision_cache、lite/effectiveness_check、lite/lite_check、mask_quality、data_clean
 
 **已知限制**：
-- FFI WorkflowEngine 未暴露（G1/G2/G3），Python 用 workflow_engine/ 镜像代替
+- ✅ FFI WorkflowEngine 已暴露（G1/G2/G3 已修复），CLI 已迁移到 FFI 路径（commit c416ee0）
 - FFI system_prompt 已修复（G4/F-01），通过 HarnessConfig 传递
 - klayout 未安装，gauge_check 几何检查 SKIPPED（非阻塞）
 - vizier 黑盒优化路径未实现（Rust 版也未实现，对齐）
@@ -245,8 +247,9 @@ model_check_feedback → calibration_report 全部通过。
 
 **E2E 验证结果**（2026-07-11）：
 - Job dir: `/data/pangen_result/eda_py_e2e_1783742578`
+- FFI E2E Job dir: 同上（复用 cached done markers），日志 `/tmp/eda_py_ffi_cached.log`
 - 运行模式：`--no-llm`（quality gates auto-pass，term_selection heuristic fallback）
 - resist_tune: cal_uwrms=0.0149, 13 terms, threshold=1.087
 - model_check: overall=FAIL（Check B Gx 系数超限 — 测试数据质量问题，非代码 bug）
 - calibration_report: 已生成
-- 已修复 Bug：PanGen subprocess 死锁、stall detection、resist_tune TCC 参数不匹配（A027）
+- 已修复 Bug：PanGen subprocess 死锁、stall detection、resist_tune TCC 参数不匹配（A027）、node_name NameError（#1）
