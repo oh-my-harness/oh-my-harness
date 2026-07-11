@@ -1,0 +1,3 @@
+[submodule "eda-agent-py"]
+	path = eda-agent-py
+	url = https://github.com/oh-my-harness/eda-agent-py.git
