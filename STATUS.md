@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-13（eda-agent 技术债清理 TD-1~TD-7 全部完成）
+> 最后更新：2026-07-13（eda-agent-py E2E 流程验证 + FFI SDK 恢复 + data_prep skip 修复）
 
 ---
 
@@ -226,11 +226,19 @@ llm_adapter = { path = "../llm-api-adapter" }
 **Python 版 EDA Agent**：通过 FFI SDK 复用 runtime，对齐 ArcGen AMC lite pipeline。
 Rust 版（eda-agent）作为交叉验证。ArcGen 是对齐基准（源头）。
 
-**当前状态**（2026-07-11）：38 stage pipeline 全部节点已实现，E2E 全流程跑通（success）。
+**当前状态**（2026-07-13）：38 stage pipeline 全部节点已实现，E2E 全流程跑通（success）。
 FFI WorkflowEngine 已暴露（G1/G2/G3 已修复），CLI 已迁移到 FFI 路径。
 FFI E2E 全流程跑通：33 步全部执行，pipeline succeeded。
 resist_tune → resist_quality → model_check → gauge_error_attribution →
 model_check_feedback → calibration_report 全部通过。
+
+**2026-07-13 修复**：
+- 恢复 FFI SDK .py 源文件（被 PyO3 迁移 commit fdbd900 误删），从 commit 8b6f7cd 恢复
+- data_clean/gauge_group/prepare_wizard 添加 skip-if-wizard-exists（对齐 Rust tool_handler.rs）
+- gauge_group 修复 self-copy crash（resume 时 validation_gauges 路径与目标相同）
+- validate_pre_gauge_group/validate_pre_prepare_wizard 添加 pre-prepared 模式
+- 38/38 测试通过（FFI SDK 恢复后 7 个 FFI gap 测试从 skip 变为 pass）
+- 33 stage E2E 序列与 ArcGen graph.py 拓扑完全对齐
 
 **本轮对齐修复**（ArcGen 源码逐节点对比）：
 
