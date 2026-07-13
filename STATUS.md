@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-13（eda-agent-py E2E 流程验证 + FFI SDK 恢复 + data_prep skip 修复）
+> 最后更新：2026-07-13（eda-agent-py 迁移到 PyO3 SDK + cffi FFI 全删）
 
 ---
 
@@ -197,7 +197,7 @@ llm_adapter = { path = "../llm-api-adapter" }
 - **WorkflowContext**（commit `9d5d442`，已合并 main）：共享可变 KV 黑板，等价 LangGraph State。executor 读写、judge 读、LLM step prompt 注入。随 WorkflowState 持久化，崩溃恢复保留。204 测试全绿。
 - **编排分工设计文档**（commit `7a4e812`）：`docs/design/2026-07-02-agent-runtime-orchestration-design.md`。明确 Agent（定义+翻译+领域逻辑）↔ Runtime（驱动+持久化+恢复）的分工边界、adapter 层职责、生命周期、与 EDA 旧 orchestrator 对比。
 - **workflow issue 收尾**：12 个 issue 提到 GitHub（#22~#34），同事修复 8 个（#22~#24/#26~#27/#31~#33），我实现 #34（WorkflowContext）。4 个低优先级 OPEN。
-- **main 分支**：已 fast-forward 合并 workflow 分支（含 WorkflowContext + FFI SDK + final answer contract）。
+- **main 分支**：已 fast-forward 合并 workflow 分支（含 WorkflowContext + PyO3 SDK + final answer contract）。
 
 ### eda-agent
 - **workflow_adapter 模块**（commit `4fb005f` / `42cae1f` / `8b7d51e`）：
@@ -223,21 +223,21 @@ llm_adapter = { path = "../llm-api-adapter" }
 
 ### eda-agent-py ✅ ArcGen 对齐 — E2E 全流程跑通
 
-**Python 版 EDA Agent**：通过 FFI SDK 复用 runtime，对齐 ArcGen AMC lite pipeline。
+**Python 版 EDA Agent**：通过 PyO3 SDK 复用 runtime，对齐 ArcGen AMC lite pipeline。
 Rust 版（eda-agent）作为交叉验证。ArcGen 是对齐基准（源头）。
 
 **当前状态**（2026-07-13）：38 stage pipeline 全部节点已实现，E2E 全流程跑通（success）。
-FFI WorkflowEngine 已暴露（G1/G2/G3 已修复），CLI 已迁移到 FFI 路径。
-FFI E2E 全流程跑通：33 步全部执行，pipeline succeeded。
+PyO3 SDK（`llm_harness_py`）已替换 cffi FFI（`llm_harness_sdk`），CLI 已迁移到 PyO3 路径。
+PyO3 E2E 全流程跑通：33 步全部执行，pipeline succeeded。
 resist_tune → resist_quality → model_check → gauge_error_attribution →
 model_check_feedback → calibration_report 全部通过。
 
-**2026-07-13 修复**：
-- 恢复 FFI SDK .py 源文件（被 PyO3 迁移 commit fdbd900 误删），从 commit 8b6f7cd 恢复
+**2026-07-13 变更**：
+- **cffi FFI 全删，迁移到 PyO3 SDK**：`llm-harness-ffi` crate 删除，`llm-harness-py` crate（PyO3 0.29）替代。eda-agent-py 完成 migration（commit `efba9a1`）：agent_call.py 用 HarnessBuilder，ffi_bridge.py 用 PyO3 WorkflowEngine + create_executor/create_judge，cli.py 简化为 run_workflow() 入口。43/43 测试通过，33-stage E2E --no-llm pipeline 成功。
 - data_clean/gauge_group/prepare_wizard 添加 skip-if-wizard-exists（对齐 Rust tool_handler.rs）
 - gauge_group 修复 self-copy crash（resume 时 validation_gauges 路径与目标相同）
 - validate_pre_gauge_group/validate_pre_prepare_wizard 添加 pre-prepared 模式
-- 38/38 测试通过（FFI SDK 恢复后 7 个 FFI gap 测试从 skip 变为 pass）
+- 12 个 PyO3 SDK 能力测试通过（test_ffi_gaps.py 重写为 PyO3 测试）
 - 33 stage E2E 序列与 ArcGen graph.py 拓扑完全对齐
 
 **本轮对齐修复**（ArcGen 源码逐节点对比）：
