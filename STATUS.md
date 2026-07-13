@@ -249,7 +249,8 @@ model_check_feedback → calibration_report 全部通过。
 - Job dir: `/data/pangen_result/eda_py_e2e_1783742578`
 - FFI E2E Job dir: 同上（复用 cached done markers），日志 `/tmp/eda_py_ffi_cached.log`
 - 运行模式：`--no-llm`（quality gates auto-pass，term_selection heuristic fallback）
+- LLM 模式 E2E（2026-07-13）：Claude Sonnet 4 驱动，37 步 pipeline succeeded。Job dir `/data/pangen_result/eda_py_ffi_llm_1783911053`，日志 `/tmp/eda_py_ffi_llm.log`。optical score=92 PASS, mask score=62 WARNING, resist LLM 触发 execute_restart 回流, term_selection 11 轮 best_uwrms=0.004, resist_tune cal_uwrms=0.0039, gauge_error_attribution dominant=resist, calibration_report LLM 生成
 - resist_tune: cal_uwrms=0.0149, 13 terms, threshold=1.087
 - model_check: overall=FAIL（Check B Gx 系数超限 — 测试数据质量问题，非代码 bug）
 - calibration_report: 已生成
-- 已修复 Bug：PanGen subprocess 死锁、stall detection、resist_tune TCC 参数不匹配（A027）、node_name NameError（#1）
+- 已修复 Bug：PanGen subprocess 死锁、stall detection、resist_tune TCC 参数不匹配（A027）、node_name NameError（#1）、from_env base_url 缺失（#3）
