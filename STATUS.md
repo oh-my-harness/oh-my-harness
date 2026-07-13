@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-11（eda-agent-py E2E 全流程跑通：resist_tune TCC 修复 + 38 stage pipeline success）
+> 最后更新：2026-07-13（eda-agent 技术债清理 TD-1~TD-7 全部完成）
 
 ---
 
@@ -74,7 +74,17 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
-### eda-agent ✅ v0.5.6 orchestrator — 36 stage pipeline（全流程 E2E 跑通 success，对齐 ArcGen AMC lite）
+### eda-agent ✅ v0.5.6 — 技术债清理完成（TD-1~TD-7），38 stage pipeline 对齐 ArcGen AMC lite
+
+**v0.5.7 (2026-07-13) 技术债清理 TD-1~TD-7 全部完成**：
+- TD-1: executor.rs 1385 行 → 4 文件模块（mod/tool_handler/checker_handler/agent_handler）
+- TD-2: 删 legacy ReAct + legacy orchestrator 路径 ~2000 行死代码
+- TD-3: StageContext 加 typed accessors + 55 个变量名常量（编译期拼写检查）
+- TD-4: 20+ 处危险 .ok() 改为 ? 传播或 warning 日志（含 Tension_1 crash 根因修复）
+- TD-5: 测试漂移随 TD-2 解决
+- TD-6: bin/eda-agent.rs 679 → 240 行，拆出 src/cli/ 模块（cli/status/provider/events）
+- TD-7: ISSUES.md 1427 → 353 行，38 个已修复 bug 归档到 ISSUES_ARCHIVE.md
+- cargo build ✅ (2 pre-existing warnings), cargo test ✅ 30/30
 
 **v0.5.5 (2026-06-29)**：A026 修复 — beam 分支从 action 检查内部移到外部。
 E2E 全流程验证通过：11 轮 K=3 并发 beam search，每轮 3 候选并发 PanGen → pick_winner →
