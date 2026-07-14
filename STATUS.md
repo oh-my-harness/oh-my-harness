@@ -272,3 +272,33 @@ model_check_feedback → calibration_report 全部通过。
 - model_check: overall=FAIL（Check B Gx 系数超限 — 测试数据质量问题，非代码 bug）
 - calibration_report: 已生成
 - 已修复 Bug：PanGen subprocess 死锁、stall detection、resist_tune TCC 参数不匹配（A027）、node_name NameError（#1）、from_env base_url 缺失（#3）
+
+---
+
+## Senza (森座) Python SDK — 2026-07-14 更新
+
+**FFI 接口打磨**（`llm-harness-py` crate，PyO3 0.29）：
+
+### WorkflowEngine 新增方法（pyworkflow.rs）
+- **P0**: `restore()` classmethod — 从 TaskStore 恢复崩溃中断的 workflow
+- **P1**: `pause(reason)` / `resume()` / `cancel(reason)` — 流程控制
+- **P1**: `state()` / `current_step()` / `step_history()` — 运行状态查询
+- **P1**: `checkpoint(desc, payload)` — 手动检查点
+- **P1**: `total_cost()` — 累计 token/成本查询
+- **P2**: `with_task_store(dir)` / `with_max_steps(n)` / `with_max_retries(n)`
+- 核心架构变更：`engine` 字段从 `Option<WorkflowEngine>` 改为 `Option<Arc<WorkflowEngine>>`，使 `pause()`/`cancel()` 等可在 `run()` 期间从另一线程调用
+
+### AgentHarness 新增方法（pyharness.rs）
+- 动态配置：`set_model` / `set_system_prompt` / `set_temperature` / `set_thinking_level` / `set_max_tokens` / `set_tools`
+- Steering：`steer` / `follow_up` / `next_turn` / `continue_run`
+- 成本：`usage()` / `reset_usage()`
+- 等待：`wait_for_idle()` / `wait_for_settled()`
+
+### 测试
+- 20 个新测试（`test_new_methods.py`）全部通过
+- 93 个已有测试全部通过（14 个 pre-existing 失败：`Agent` 实例化 + `tool.drive()` 缺失，与本次改动无关）
+
+### Senza 仓库（llm-harness-py-wheels）
+- 11 个 examples（5 agent + 6 runtime）已推送
+- 3 个 skill 文件已更新（senza-agent / senza-workflow / senza-advanced）
+- 待做：CI wheel 构建、仓库改名（→ senza）、PyPI 注册
