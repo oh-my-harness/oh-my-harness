@@ -302,3 +302,11 @@ model_check_feedback → calibration_report 全部通过。
 - 11 个 examples（5 agent + 6 runtime）已推送
 - 3 个 skill 文件已更新（senza-agent / senza-workflow / senza-advanced）
 - 待做：CI wheel 构建、仓库改名（→ senza）、PyPI 注册
+
+### 2026-07-14 追加更新
+
+- **docstring gap 已关闭**：PyO3 0.29 自动导出 Rust doc comments 为 `__doc__`，全部函数/类/方法已覆盖（补了 `version()` 和 `create_event_channel()` 的 doc comment）
+- **AgentHarness context manager**：`__enter__`/`__exit__` 已添加（`__exit__` 调 `abort()` 清理，不抑制异常）
+- **Builtin executor factories**：`create_shell_executor(commands, ...)` 和 `create_http_executor(allowed_hosts, ...)` 已暴露。不自动注册（安全设计），用户需 `engine.with_executor(name, exec)` 显式注册。`PyExecutorWrapper` 改为持有 `Arc<dyn StepExecutor>` 以支持任意 executor 类型
+- **测试**：23 个新测试全部通过，119 个已有测试无回归
+- **剩余 gap**：仅 `WorkflowEngine.run()` async 版本（P2，设计层面 — 当前同步阻塞够用）
