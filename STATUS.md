@@ -83,7 +83,7 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 - TD-4: 20+ 处危险 .ok() 改为 ? 传播或 warning 日志（含 Tension_1 crash 根因修复）
 - TD-5: 测试漂移随 TD-2 解决
 - TD-6: bin/eda-agent.rs 679 → 240 行，拆出 src/cli/ 模块（cli/status/provider/events）
-- TD-7: ISSUES.md 1427 → 353 行，38 个已修复 bug 归档到 ISSUES_ARCHIVE.md
+- TD-7: ISSUES.md 精简为 GitHub Issues 速查表，历史 bug 全部迁移到 [GitHub Issues](https://github.com/oh-my-harness/eda-agent/issues)
 - cargo build ✅ (2 pre-existing warnings), cargo test ✅ 30/30
 
 **v0.5.5 (2026-06-29)**：A026 修复 — beam 分支从 action 检查内部移到外部。
