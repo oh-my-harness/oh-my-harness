@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-13（eda-agent-py 迁移到 PyO3 SDK + cffi FFI 全删）
+> 最后更新：2026-07-17（llm_adapter rev bump → e44758b8，修复 Anthropic set_thinking_level wire 格式）
 
 ---
 
@@ -25,7 +25,7 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 - Anthropic、OpenAI-compatible provider 实现完整
 - 支持 streaming、tool use、thinking（extended thinking）
 - DeepSeek 通过 OpenAI provider 复用实现
-- PR #6 待合并（`extended_thinking_budget` 字段支持）
+- `set_thinking_level` wire 格式修复已合入 main（commit `e44758b`，2026-07-17）：Anthropic 4.7+ 的 `effort` 从嵌套 `thinking.adaptive.effort`（被 API 拒绝）改为顶层 `output_config.effort`。runtime 已 bump rev `30ae9284 → e44758b8`
 - **已知缺口**：Azure OpenAI 不支持；Responses API 不支持
 
 ### llm-harness-core ✅ 核心功能完整
@@ -298,10 +298,15 @@ model_check_feedback → calibration_report 全部通过。
 - 20 个新测试（`test_new_methods.py`）全部通过
 - 93 个已有测试全部通过（14 个 pre-existing 失败：`Agent` 实例化 + `tool.drive()` 缺失，与本次改动无关）
 
-### Senza 仓库（llm-harness-py-wheels）
-- 11 个 examples（5 agent + 6 runtime）已推送
-- 3 个 skill 文件已更新（senza-agent / senza-workflow / senza-advanced）
-- 待做：CI wheel 构建、仓库改名（→ senza）、PyPI 注册
+### Senza 仓库（github.com/oh-my-harness/Senza，原 llm-harness-py-wheels）
+- 仓库已改名 → Senza，PyPI 包名 `senza-sdk`（import 名 `senza`，PyPI `senza` 被 Zalando 占用）
+- 14 个 examples（5 agent + 6 runtime + 3 advanced，含 `09_composite_judge.py`）已推送
+- 类型 stub（`.pyi` + `py.typed`）：276 行手写 `senza-pkg/senza/__init__.pyi`，maturin `--generate-stubs` 构建
+- CI pipeline（`.github/workflows/build-wheel.yml`）：tag push → checkout Senza + runtime → `maturin build --release --generate-stubs` → GitHub Release → PyPI publish
+- GitHub Release v0.1.0 已发布（wheel asset 附带）
+- eda-agent-py 已从 `import llm_harness_py` 迁移到 `import senza`（43 测试通过）
+- **待做（阻塞，需用户操作）**：PyPI 发布需用户注册 `senza-sdk`、设置 `PYPI_API_TOKEN` secret 后重新 tag 触发 CI
+- **待做（非阻塞）**：CI 平台矩阵扩展（当前仅 manylinux_2_34_x86_64，待加 macOS + Windows）
 
 ### 2026-07-14 追加更新
 
@@ -310,3 +315,13 @@ model_check_feedback → calibration_report 全部通过。
 - **Builtin executor factories**：`create_shell_executor(commands, ...)` 和 `create_http_executor(allowed_hosts, ...)` 已暴露。不自动注册（安全设计），用户需 `engine.with_executor(name, exec)` 显式注册。`PyExecutorWrapper` 改为持有 `Arc<dyn StepExecutor>` 以支持任意 executor 类型
 - **测试**：23 个新测试全部通过，119 个已有测试无回归
 - **剩余 gap**：仅 `WorkflowEngine.run()` async 版本（P2，设计层面 — 当前同步阻塞够用）
+
+### 2026-07-17 更新
+
+- **llm_adapter rev bump**：runtime `Cargo.toml` 的 `llm_adapter` rev `30ae9284 → e44758b8`
+  （llm-api-adapter 同事 Ryan Yu 推入的 `set_thinking_level` 修复）。
+  `e44758b` 把 Anthropic 4.7+ 的 `effort` 从嵌套 `thinking.adaptive.effort`（API 拒绝）
+  移到顶层 `output_config.effort`。改动为 `pub(crate)` 内部，公开 API 不变。
+- 验证：`cargo build --workspace` ✅，`cargo test -p llm-harness-loop --features test-utils` 89 passed ✅，
+  Senza wheel 构建可见 `rev=e44758b8` ✅，`import senza` ✅，eda-agent-py 43 测试 ✅
+- commit `5ed4915`（runtime main），rebase 后线性推送
