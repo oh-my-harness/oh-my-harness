@@ -226,7 +226,7 @@ llm_adapter = { path = "../llm-api-adapter" }
 **Python 版 EDA Agent**：通过 PyO3 SDK 复用 runtime，对齐 ArcGen AMC lite pipeline。
 Rust 版（eda-agent）作为交叉验证。ArcGen 是对齐基准（源头）。
 
-**当前状态**（2026-07-13）：38 stage pipeline 全部节点已实现，E2E 全流程跑通（success）。
+**当前状态**（2026-07-17）：38 stage pipeline 全部节点已实现，E2E 全流程跑通（default + LLM 模式）。
 PyO3 SDK（`llm_harness_py`）已替换 cffi FFI（`llm_harness_sdk`），CLI 已迁移到 PyO3 路径。
 PyO3 E2E 全流程跑通：33 步全部执行，pipeline succeeded。
 resist_tune → resist_quality → model_check → gauge_error_attribution →
@@ -325,3 +325,20 @@ model_check_feedback → calibration_report 全部通过。
 - 验证：`cargo build --workspace` ✅，`cargo test -p llm-harness-loop --features test-utils` 89 passed ✅，
   Senza wheel 构建可见 `rev=e44758b8` ✅，`import senza` ✅，eda-agent-py 43 测试 ✅
 - commit `5ed4915`（runtime main），rebase 后线性推送
+
+### 2026-07-17 eda-agent-py 更新
+
+- **E2E default + LLM 模式跑通**：33 步 pipeline 完整执行（Qwen3.5-397B LLM），与 ArcGen 参考运行（optical_search_20260713115140）双跑对比：
+  - Stage 序列 ✅ 一致（33 步）
+  - model_check ✅ 一致（FAIL）
+  - 数值差异 ⚠️ 预期内（LLM 选了不同 group，级联差异）
+- **LLM 集成修复**（commit 3459fb4）：
+  - `agent_call.py`：`prompt_and_collect()` 替代 `prompt()`+`collect_until_settled()`（修复 broadcast channel 晚订阅导致 0 事件）
+  - `config.py`：strip `base_url` 尾部 `/v1`（senza chat_path 已含 `/v1`）
+  - `beam_runner.py`：`_REQUIRED_PATTERNS` 添加 `calibration_context.json`（修复 PanGen SIGSEGV）
+  - `term_selection.py`：添加 done marker 缓存（断点续跑）
+- **Case 数据修复**：`calibration_context.json` 补回 `gds_layers`（submodule commit 8705bcb 添加后被移除）
+- **G6/G7 已暴露**：PyO3 SDK 已暴露 `restore()` / `pause/resume/cancel`（default 模式暂未使用）
+- Issues：#5（stall detection 已移除）、#6（beam_runner calibration_context.json 已修）
+- 43/43 测试通过，CLAUDE.md 已更新
+
