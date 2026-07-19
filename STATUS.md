@@ -338,6 +338,11 @@ model_check_feedback → calibration_report 全部通过。
 
 此前已核实关闭的已修未关 issue：#62（`restore_from_step`）、#66（README/examples/docs）、#67（CI wheel workflow）、Senza #3（`with_max_retries` docstring）、Senza #4（`create_os_env` 接入）。至此 Senza 仓库 0 open issue，runtime 仓库 FFI/交付阻塞 issue 清零。
 
+### 2026-07-19 Senza FFI 后续修复（Senza #5/#6）
+
+- **Senza #6** `.pyi` stub 漂移修复（commit `dff2d98`）：#63 只门控了 `m.add_class`，但 PyO3 experimental-inspect 的 stub 生成器编译时看到 `#[pyclass]` 就生成 `class Agent`，导致生产 `.pyi` 声明了 Agent 的 5 个方法但运行时无 `senza.Agent`。现将整个 `PyAgent`（`#[pyclass]` + inherent impl + `#[pymethods]`）门控到 `test-utils`，从生产 `.pyi` 删除 `class Agent`，`check_stubs.py` 白名单加入 5 个 Agent 方法。验证：生产 + test-utils 两种 wheel `check_stubs` 均零漂移（135 签名）。
+- **Senza #5** PyPI Linux wheel manylinux 标签修复（commit `a702282`）：CI 在 ubuntu-latest（glibc 2.39）直接构建，产出 `manylinux_2_39`，RHEL 8/Ubuntu 20.04/Debian 11 装不了。改用 `PyO3/maturin-action@v1` + `manylinux: 2_28` 容器构建，产出 `manylinux_2_28`（覆盖 glibc 2.28+）。加 `before-script-linux` 在容器内重建 `RUNTIME_PAT` 凭证使 cargo 能拉私有 runtime crate。macOS/Windows 不受影响。建议打 v0.4.3 tag 触发 CI 验证 PyPI 实际标签。
+
 ### 2026-07-17 eda-agent-py 更新
 
 - **E2E default + LLM 模式跑通**：33 步 pipeline 完整执行（Qwen3.5-397B LLM），与 ArcGen 参考运行（optical_search_20260713115140）双跑对比：
