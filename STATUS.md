@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-17（llm_adapter rev bump → e44758b8，修复 Anthropic set_thinking_level wire 格式）
+> 最后更新：2026-07-19（eda-agent ArcGen 对齐审查：F/G 策略写 term_pool.json 修复 + 4 个对齐差距 issue #43-46）
 
 ---
 
@@ -75,6 +75,11 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 **注**：原 `oh-my-harness/tutor-agent` 独立仓库已迁入本仓库并 archive。
 
 ### eda-agent ✅ v0.5.6 — 技术债清理完成（TD-1~TD-7），38 stage pipeline 对齐 ArcGen AMC lite
+
+**v0.5.8 (2026-07-19) ArcGen `c15dc55` 对齐审查**：
+- 修复 F/G 策略（`fg_strategy1_adjust_sigma`/`fg_strategy2_reduce_beta`）从写 `wizard.json` 改为写 `lite/term_pool.json`（commit `051bb99`）——旧实现写 wizard.json 在 lite 模式下被 PanGen 忽略，F/G 自动修复完全无效。
+- cargo fmt ✅ / clippy 0 warning ✅ / test 83/83 ✅
+- 新提 4 个对齐差距 issue：#43（term_selection_lite 未注入 mask/optical 参数）、#44（Round 0 缺 4 层优先级）、#45（缺 autoweight 集成）、#46（model check 回退体系未对齐）。详见 `eda-agent/HANDOFF.md`。
 
 **v0.5.7 (2026-07-13) 技术债清理 TD-1~TD-7 全部完成**：
 - TD-1: executor.rs 1385 行 → 4 文件模块（mod/tool_handler/checker_handler/agent_handler）
