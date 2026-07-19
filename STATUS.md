@@ -326,6 +326,18 @@ model_check_feedback → calibration_report 全部通过。
   Senza wheel 构建可见 `rev=e44758b8` ✅，`import senza` ✅，eda-agent-py 43 测试 ✅
 - commit `5ed4915`（runtime main），rebase 后线性推送
 
+### 2026-07-19 Senza FFI 生产级交付修复（issue #63/#64/#65）
+
+三个阻塞生产级交付的 FFI issue 全部修复并关闭（commits 在 Senza 仓库 main）：
+
+- **#65** `create_anthropic_provider` 暴露 `messages_path` 参数（commit `0effe42`）：Rust 侧 `AnthropicProviderBuilder.messages_path()` 本已存在，未暴露到 Python。现与 `create_openai_provider` 的 `chat_path` 对称，Anthropic 兼容代理（Azure/Bedrock/自建网关）客户可自定义 API 路径。`.pyi` 同步。
+- **#63** `PyAgent` 类注册门控到 `test-utils` feature（commit `8fec8ac`）：此前 `add_class::<PyAgent>` 无条件注册但 `#[new]` 用 `MockLlmClient`（test-only），生产 wheel 下 `senza.Agent(...)` 报 `TypeError`，19 测试失败。现生产 wheel 不暴露 `Agent`（入口仍是 `HarnessBuilder`→`AgentHarness`）。新增 `tests/conftest.py`：生产 wheel 下自动跳过 4 个 test-utils 测试模块。
+- **#64** 8 个 `with_*` 方法静默失败修复（commit `c7ced22`）：`with_tool`/`with_external_tool`/`with_max_tokens`/`with_step_plugin`/`with_executor`/`with_task_store`/`with_max_steps`/`with_max_retries` 在 `Arc::try_unwrap` 失败（engine 共享/运行中）时静默丢弃操作。现统一返回 `PyResult`，失败抛 `RuntimeError`，与 `with_hooks` 一致。
+
+验证：release 构建通过（test-utils + 生产 abi3 两 wheel）；`cargo fmt --check` 干净；`cargo clippy --lib -D warnings` 无警告；`check_stubs.py` 140 签名无漂移；test-utils wheel 225 passed，生产 wheel 204 passed + 21 skipped。
+
+此前已核实关闭的已修未关 issue：#62（`restore_from_step`）、#66（README/examples/docs）、#67（CI wheel workflow）、Senza #3（`with_max_retries` docstring）、Senza #4（`create_os_env` 接入）。至此 Senza 仓库 0 open issue，runtime 仓库 FFI/交付阻塞 issue 清零。
+
 ### 2026-07-17 eda-agent-py 更新
 
 - **E2E default + LLM 模式跑通**：33 步 pipeline 完整执行（Qwen3.5-397B LLM），与 ArcGen 参考运行（optical_search_20260713115140）双跑对比：
@@ -341,4 +353,3 @@ model_check_feedback → calibration_report 全部通过。
 - **G6/G7 已暴露**：PyO3 SDK 已暴露 `restore()` / `pause/resume/cancel`（default 模式暂未使用）
 - Issues：#5（stall detection 已移除）、#6（beam_runner calibration_context.json 已修）
 - 43/43 测试通过，CLAUDE.md 已更新
-
