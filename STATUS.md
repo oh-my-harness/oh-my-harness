@@ -343,6 +343,14 @@ model_check_feedback → calibration_report 全部通过。
 - **Senza #6** `.pyi` stub 漂移修复（commit `dff2d98`）：#63 只门控了 `m.add_class`，但 PyO3 experimental-inspect 的 stub 生成器编译时看到 `#[pyclass]` 就生成 `class Agent`，导致生产 `.pyi` 声明了 Agent 的 5 个方法但运行时无 `senza.Agent`。现将整个 `PyAgent`（`#[pyclass]` + inherent impl + `#[pymethods]`）门控到 `test-utils`，从生产 `.pyi` 删除 `class Agent`，`check_stubs.py` 白名单加入 5 个 Agent 方法。验证：生产 + test-utils 两种 wheel `check_stubs` 均零漂移（135 签名）。
 - **Senza #5** PyPI Linux wheel manylinux 标签修复（commit `a702282`）：CI 在 ubuntu-latest（glibc 2.39）直接构建，产出 `manylinux_2_39`，RHEL 8/Ubuntu 20.04/Debian 11 装不了。改用 `PyO3/maturin-action@v1` + `manylinux: 2_28` 容器构建，产出 `manylinux_2_28`（覆盖 glibc 2.28+）。加 `before-script-linux` 在容器内重建 `RUNTIME_PAT` 凭证使 cargo 能拉私有 runtime crate。macOS/Windows 不受影响。建议打 v0.4.3 tag 触发 CI 验证 PyPI 实际标签。
 
+### 2026-07-19 Senza examples/README 修复 + v0.4.3 发布验证（Senza #7/#8/#9）
+
+- **Senza #8** README `create_anthropic_provider` 签名补 `messages_path`（commit `74601d6`）。已关闭。
+- **Senza #7** 4 个 example bug 修复（commit `f2f1516`）：① `03_executor_steps.py` judge 总 abort + ctx key `output`→`prev_output`；② `09_composite_judge.py` 加 `parse_score` executor step 产 structured 让 condition 可匹配；③ `01_basic_prompt.py` env var `OPENAI_BASE_URL`→`OPENAI_API_BASE`；④ 14 个 example 硬编码 `gpt-4o`→`os.environ.get("SENZA_MODEL", "gpt-4o")`。已关闭。
+- **v0.4.3 发布验证**：tag `v0.4.3` 已触发 CI，Build Wheel 成功（首次 `98dc474` 因 `ls|head` SIGPIPE pipefail 失败，`948f92a` 修复后重跑成功）。GitHub Release 发布 3 个 wheel：`senza_sdk-0.4.3-cp39-abi3-macosx_11_0_arm64.whl`、`senza_sdk-0.4.3-cp39-abi3-manylinux_2_28_x86_64.whl`、`senza_sdk-0.4.3-cp39-abi3-win_amd64.whl`。**Linux wheel 标签确认为 `manylinux_2_28`，Senza #5 修复验证通过。**
+- **Senza #9**（新开，enhancement）：examples 覆盖缺口。经 `rg` 全量比对 `.pyi` stub 与 examples 实际调用，确认以下 API 零示例覆盖——P0 安全/合规/成本（Rules 6 API + Hooks 11 API + Budget/Pricing 3 API）、P1 核心功能（Skills/Plugin/`create_sync_tool`）、P2 AgentHarness 高级方法（steering/session-branch/context-manager/waiting/queue/builder 配置）、P3 WorkflowEngine 补充（`with_hooks`/`with_max_retries`/`restore_from_step`）、P4 其他（Anthropic 独立示例/utilities）。
+
+### 2026-07-17 eda-agent-py 更新
 ### 2026-07-17 eda-agent-py 更新
 
 - **E2E default + LLM 模式跑通**：33 步 pipeline 完整执行（Qwen3.5-397B LLM），与 ArcGen 参考运行（optical_search_20260713115140）双跑对比：
