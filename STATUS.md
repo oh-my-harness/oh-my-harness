@@ -235,6 +235,11 @@ llm_adapter = { path = "../llm-api-adapter" }
 
 ### eda-agent-py ✅ ArcGen 对齐 — E2E 全流程跑通
 
+**2026-07-20 变更**：
+- **#13 mask_search BO 引擎路由**：添加 `_choose_engine()`（llm-auto → vizier，default → pangen）+ `_mask_search_bo()` 子进程调用 ArcGen `mask_bo_subprocess`（两阶段等待 + JAX 挂死兜底）+ `_bounds_from_ctx` + `_detect_gpus`。`run_mask_search` 重构为路由器，pangen 路径提取为 `_mask_search_pangen`。EdaConfig 添加 `bo_batches`/`bo_random_seed`/`bo_patience`/`bo_min_batches`/`bo_gpu_ids`。13 个新测试通过。
+- **#15 retry 上下文传递**：`model_check_feedback` 添加 `_build_terms_override()`（Check D 低贡献 term 自动禁用），LLM + rule-based 双路径写入 `prev_selected_terms` + `max_rounds_override=4` + `initial_terms_override` + 上下文注入。`term_selection` 读取 `max_rounds_override` + `_is_retry` + 降低 `consecutive_fail_limit`（10→3）。6 个新测试通过。
+- 总测试 62/62 通过。
+
 **Python 版 EDA Agent**：通过 PyO3 SDK 复用 runtime，对齐 ArcGen AMC lite pipeline。
 Rust 版（eda-agent）作为交叉验证。ArcGen 是对齐基准（源头）。
 
@@ -271,7 +276,7 @@ model_check_feedback → calibration_report 全部通过。
 - ✅ FFI WorkflowEngine 已暴露（G1/G2/G3 已修复），CLI 已迁移到 FFI 路径（commit c416ee0）
 - FFI system_prompt 已修复（G4/F-01），通过 HarnessConfig 传递
 - klayout 未安装，gauge_check 几何检查 SKIPPED（非阻塞）
-- vizier 黑盒优化路径未实现（Rust 版也未实现，对齐）
+- ✅ vizier BO 引擎路由已实现（#13）：`_choose_engine` + `_mask_search_bo` 子进程调用 ArcGen `mask_bo_subprocess`，llm-auto 模式自动路由到 BO，default 模式走 pangen
 - pframe_model_check.py grid_check session（distributed 模式）segfault — PanGen 内部 bug，非阻塞
 - PanGen cal session 死锁 — stall detection workaround 已覆盖 calibrate/compute_tcc session
 
