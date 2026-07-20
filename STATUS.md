@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-20（eda-agent #43 mask_params 注入修复：term_selection_lite 现注入 mask/optical 搜索参数到 fit 脚本）
+> 最后更新：2026-07-20（eda-agent #43 mask_params 注入 + #44 Round 0 经验复用 layer 3：相似度 ≥ 0.6 时跳过 LLM 直接复用 best_terms）
 
 ---
 
@@ -80,6 +80,7 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 - 修复 F/G 策略（`fg_strategy1_adjust_sigma`/`fg_strategy2_reduce_beta`）从写 `wizard.json` 改为写 `lite/term_pool.json`（commit `051bb99`）——旧实现写 wizard.json 在 lite 模式下被 PanGen 忽略，F/G 自动修复完全无效。
 - cargo fmt ✅ / clippy 0 warning ✅ / test 83/83 ✅
 - #43 已修复（commit `f6e68c1`）：`term_selection_lite` 现注入 mask/optical 搜索参数到 `fit_resist_model_ntd_w7.py`（`generate_fit_script_from_mask_params` helper，读 `mask_params.json`，兼容 string/number JSON 值）。`generate_fit_script` 增加 `in_corner` 参数。3 个单元测试。cargo test 86/86 ✅
+- #44 layer 3 已实现（commit `3e3b7ba`）：Round 0 经验直接复用——相似度 ≥ 0.6 且非 FAIL 时，`find_experience_for_round0` 返回 (group, best_terms)，`map_experience_terms` 映射到 term_pool.json，跳过 LLM 直接 run baseline PanGen。layers 1-2（override + prev_selected_terms）待实现（与 #46 关联）。2 个单元测试。cargo test 88/88 ✅
 - 剩余 3 个对齐差距 issue：#44（Round 0 缺 4 层优先级）、#45（缺 autoweight 集成）、#46（model check 回退体系未对齐）。详见 `eda-agent/HANDOFF.md`。
 
 **v0.5.7 (2026-07-13) 技术债清理 TD-1~TD-7 全部完成**：
