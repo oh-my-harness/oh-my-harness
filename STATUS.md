@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-20（eda-agent #43 mask_params 注入 + #44 Round 0 经验复用 layer 3：相似度 ≥ 0.6 时跳过 LLM 直接复用 best_terms）
+> 最后更新：2026-07-21（Senza v0.4.6 升级：response_format 原生 JSON 模式 + FFI 新 API 测试；eda-agent-py #13 BO 引擎路由 + #15 retry 上下文修复）
 
 ---
 
@@ -234,6 +234,9 @@ llm_adapter = { path = "../llm-api-adapter" }
 
 
 ### eda-agent-py ✅ ArcGen 对齐 — E2E 全流程跑通
+
+**2026-07-21 变更**：
+- **Senza v0.4.6 升级**：从 v0.3.0 升级到 v0.4.6（跨 3 个版本）。`single_llm_call_json` 启用 `response_format(json_object)` 原生 JSON 模式（OpenAI 兼容 provider 受益，Anthropic 静默忽略走 regex fallback）。`single_llm_call` 新增 `json_mode` 参数。5 个新 FFI API 测试（response_format/fs_tools_plugin/after_turn_hook/structured_status）。67/67 测试通过。核心 API（HarnessBuilder/WorkflowEngine/create_executor/judge）完全向后兼容，无需改动。
 
 **2026-07-20 变更**：
 - **#13 mask_search BO 引擎路由**：添加 `_choose_engine()`（llm-auto → vizier，default → pangen）+ `_mask_search_bo()` 子进程调用 ArcGen `mask_bo_subprocess`（两阶段等待 + JAX 挂死兜底）+ `_bounds_from_ctx` + `_detect_gpus`。`run_mask_search` 重构为路由器，pangen 路径提取为 `_mask_search_pangen`。EdaConfig 添加 `bo_batches`/`bo_random_seed`/`bo_patience`/`bo_min_batches`/`bo_gpu_ids`。13 个新测试通过。
