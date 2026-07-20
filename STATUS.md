@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-21（Senza v0.4.6 升级：response_format 原生 JSON 模式 + FFI 新 API 测试；eda-agent-py #13 BO 引擎路由 + #15 retry 上下文修复）
+> 最后更新：2026-07-21（eda-agent-py #27-#32 全部修复：lite_check 对齐 + F/G 策略 term_pool.json + pipeline 路由修正 + 动态字段清场；67/67 测试通过）
 
 ---
 
@@ -234,6 +234,15 @@ llm_adapter = { path = "../llm-api-adapter" }
 
 
 ### eda-agent-py ✅ ArcGen 对齐 — E2E 全流程跑通
+
+**2026-07-21 变更（#27-#32 对齐 ArcGen c15dc55）**：
+- **#27 resist_quality_llm 移除**：pipeline.yaml 删除 resist_quality_llm 节点，resist_quality 直接路由到 validate_pre_model_check。executor.py 质量门元组移除该节点。
+- **#28 route_findoptics vizier skip 修正**：next_on_skip 从 validate_pre_run_optical_search 改为 validate_pre_mask_search（vizier 模式跳过整个光学路径）。
+- **#29 route_prepare_wizard 条件路由**：新增 route_prepare_wizard checker 节点，双 vizier（mask+optics）时跳过 prepare_wizard。
+- **#30 动态 fields_to_clear_for_restart**：新增 `orchestrator/ownership.py`（镜像 ArcGen orchestration/ownership.py），common.py 和 model_check.py 的硬编码 `_CLEAR_FROM` 字典替换为动态函数调用。
+- **#31 lite_check Check A/C/D/E 对齐**：Check A/E 添加 final_uwrms 优先读取；Check C 无边界参数改为 continue（不产生 WARNING）；Check D real_contributions + terms_summarize 添加 FAIL 分级（<0.01 FAIL, <0.02 WARNING）。全部 diff 与 ArcGen c15dc55 一致。
+- **#32 F/G 策略改写 term_pool.json**：策略1（调 sigma）和策略2（调 beta）从修改 wizard.json 改为读写 term_pool.json（Lite 模式下 PanGen 实际读取的文件）。移除 _load_wizard_model/_save_wizard/_resist_param_page 死代码。
+- 总测试 67/67 通过。commit 05796cf。
 
 **2026-07-21 变更**：
 - **Senza v0.4.6 升级**：从 v0.3.0 升级到 v0.4.6（跨 3 个版本）。`single_llm_call_json` 启用 `response_format(json_object)` 原生 JSON 模式（OpenAI 兼容 provider 受益，Anthropic 静默忽略走 regex fallback）。`single_llm_call` 新增 `json_mode` 参数。5 个新 FFI API 测试（response_format/fs_tools_plugin/after_turn_hook/structured_status）。67/67 测试通过。核心 API（HarnessBuilder/WorkflowEngine/create_executor/judge）完全向后兼容，无需改动。
