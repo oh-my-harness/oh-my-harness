@@ -76,6 +76,11 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 
 ### eda-agent ✅ v0.5.6 — 技术债清理完成（TD-1~TD-7），38 stage pipeline 对齐 ArcGen AMC lite
 
+**v0.5.9 (2026-07-20) ArcGen `5210576` 对齐审查**：
+- ArcGen `5210576` 修复 gauge_check space gauge 误判 + fail gauge 文件 + 用户交互删除 + mask BO JAX 挂死。
+- **eda-agent（Rust）**：space gauge 修复自动生效（wrapper import ArcGen `make_gauge_check()`，layout_parser.py 运行时直接用）。mask BO JAX 修复 N/A（vizier BO 未实现，走 pangen 路径）。**未对齐**：`user_prompt_fn` 未传入（fail gauge 默认保留，无交互删除）+ cal/val 双文件检查待确认 → 开 issue #49 跟踪。
+- **eda-agent-py（Python）**：有独立 `_layout_parser.py`，`check_single_gauge` 缺 space 分支 → space gauge 误判 FAIL。缺 fail gauge 文件/用户交互/cleaned 文件/gds_layers 配置层优先选择 → 开 eda-agent-py #23 跟踪。
+
 **v0.5.8 (2026-07-19) ArcGen `c15dc55` 对齐审查**：
 - 修复 F/G 策略（`fg_strategy1_adjust_sigma`/`fg_strategy2_reduce_beta`）从写 `wizard.json` 改为写 `lite/term_pool.json`（commit `051bb99`）——旧实现写 wizard.json 在 lite 模式下被 PanGen 忽略，F/G 自动修复完全无效。
 - cargo fmt ✅ / clippy 0 warning ✅ / test 83/83 ✅
