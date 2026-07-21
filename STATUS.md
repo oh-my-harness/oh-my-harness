@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-21（eda-agent-py #27-#32 全部修复：lite_check 对齐 + F/G 策略 term_pool.json + pipeline 路由修正 + 动态字段清场；67/67 测试通过）
+> 最后更新：2026-07-21（eda-agent-py #27-#32 修复 + ArcGen 88c1862 schema 对齐：calibration_context 新增 5 个光学参数字段；#33 跟踪 deferred 项；67/67 测试通过）
 
 ---
 
