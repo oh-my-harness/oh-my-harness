@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-21（eda-agent-py #27-#32 修复 + ArcGen 88c1862 schema 对齐：calibration_context 新增 5 个光学参数字段；#33 跟踪 deferred 项；67/67 测试通过）
+> 最后更新：2026-07-21（eda-agent-py 全部 issue 清零：#24-#32 + #33 全部修复/关闭。ContextAdvisor LLM ReAct agent + llm-interactive 模式 + gauge_check 用户交互 + ArcGen c15dc55/88c1862 对齐；83/83 测试通过）
 
 ---
 
@@ -234,6 +234,13 @@ llm_adapter = { path = "../llm-api-adapter" }
 
 
 ### eda-agent-py ✅ ArcGen 对齐 — E2E 全流程跑通
+
+**2026-07-21 变更（#24-#26 + #33 全部修复）**：
+- **#24 ContextAdvisor (LLM ReAct)**：新增 （list_files/read_file/ask_user/submit_context 4 个工具 + schema）+ （build_context_with_react，通过 senza SDK HarnessBuilder tool calling + should_stop_hook 自动 ReAct 循环）。 在 llm-auto/llm-interactive 模式下无 calibration_context.json 时启动 ContextAdvisor 收集参数。
+- **#25 llm-interactive 模式**：CLI 新增  选项，EdaConfig 新增  +  回调字段，CLI 自动接线 stdin 交互回调。
+- **#26 gauge_check 用户交互**：gauge_check 检测到 FAIL gauge 时调用 ，提供删除/保留/查看三个选项。删除 →  生成 cleaned gauge 文件。无回调时默认保留。
+- **#33 关闭**：#24 和 #26 已实现，schema 对齐已完成。
+- 16 个新测试（context_tools + gauge 交互 + config 回调）。总测试 83/83 通过。commit 791cf88。
 
 **2026-07-21 变更（#27-#32 对齐 ArcGen c15dc55）**：
 - **#27 resist_quality_llm 移除**：pipeline.yaml 删除 resist_quality_llm 节点，resist_quality 直接路由到 validate_pre_model_check。executor.py 质量门元组移除该节点。
