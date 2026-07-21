@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-21（eda-agent-py 全部 issue 清零：#24-#32 + #33 全部修复/关闭。ContextAdvisor LLM ReAct agent + llm-interactive 模式 + gauge_check 用户交互 + ArcGen c15dc55/88c1862 对齐；83/83 测试通过）
+> 最后更新：2026-07-21（eda-agent-py 全部 issue 清零：#24-#40 全部修复/关闭。ArcGen 88c1862 6 项对齐差距修复（ownership API + tried_decisions pipeline + beam_runner deviation + term_advisor 3 文件拆分 + ContextAdvisor KB stub + gauge_check LLM reporter）；83/83 测试通过）
 
 ---
 
@@ -250,6 +250,15 @@ llm_adapter = { path = "../llm-api-adapter" }
 - **#31 lite_check Check A/C/D/E 对齐**：Check A/E 添加 final_uwrms 优先读取；Check C 无边界参数改为 continue（不产生 WARNING）；Check D real_contributions + terms_summarize 添加 FAIL 分级（<0.01 FAIL, <0.02 WARNING）。全部 diff 与 ArcGen c15dc55 一致。
 - **#32 F/G 策略改写 term_pool.json**：策略1（调 sigma）和策略2（调 beta）从修改 wizard.json 改为读写 term_pool.json（Lite 模式下 PanGen 实际读取的文件）。移除 _load_wizard_model/_save_wizard/_resist_param_page 死代码。
 - 总测试 67/67 通过。commit 05796cf。
+
+**2026-07-21 变更（#35-#40 对齐 ArcGen 88c1862 — 6 项显式不对齐修复）**：
+- **#35 ownership.py API 对齐**：`fields_to_clear_for_restart()` 返回值从 `set[str]` 改为 `dict[str, object]`（field→reset value），新增 `CONDITIONAL_NODES`/`QUALITY_GATE_NODES`/`NODE_PREDECESSOR`/`_FIELD_RESET`/`QUALITY_GATE_BY_RESTART_TARGET`，移除 `preserve_feedback` 参数（ArcGen 在 caller 层处理保留逻辑）。common.py 和 model_check.py 调用方更新。
+- **#36 tried_decisions pipeline**：`DecisionCache` 添加 `tried_decisions_for_terms()` 方法；`_build_lite_prompt` + `decide_k_candidates_with_react_lite` 添加 `tried_decisions`/`force_upgrade_group` 参数；prompt 注入"已试过决策"和"强制 upgrade_group"段落；`decide_with_react_lite` 修复 `feedback_instructions` 传递；term_selection.py 调用方接线。
+- **#37 beam_runner async/sync**：记录为 intentional deviation D-37（Senza PyO3 无 asyncio 事件循环，ThreadPoolExecutor 是正确并行方案）。
+- **#38 term_advisor 文件拆分**：`term_advisor_lite.py`（1264 行）拆分为 3 文件匹配 ArcGen 结构：`term_advisor_lite.py`（入口，179 行）+ `term_advisor_ops.py`（启发式 ops，332 行）+ `term_advisor_prompts.py`（LLM prompts，790 行）。
+- **#39 ContextAdvisor KB 集成**：`build_context_with_react` 添加 `kb=None` 参数 + KB 读取逻辑；新增 `try_build_kb()`（返回 None）+ `write_context_to_kb()`（no-op）stub，接口对齐 ArcGen F-42。
+- **#40 gauge_check LLM reporter**：`result_analyzers.py` 添加 `GAUGE_CHECK_REPORTER_SYSTEM_PROMPT` + `build_gauge_check_reporter_prompt()`；`data_prep.py` 用 `single_llm_call_json` 替换 placeholder，对齐 ArcGen GaugeCheckReporter (F-48)。
+- 总测试 83/83 通过。commits d3aef0a → 413c2c0。
 
 **2026-07-21 变更**：
 - **Senza v0.4.6 升级**：从 v0.3.0 升级到 v0.4.6（跨 3 个版本）。`single_llm_call_json` 启用 `response_format(json_object)` 原生 JSON 模式（OpenAI 兼容 provider 受益，Anthropic 静默忽略走 regex fallback）。`single_llm_call` 新增 `json_mode` 参数。5 个新 FFI API 测试（response_format/fs_tools_plugin/after_turn_hook/structured_status）。67/67 测试通过。核心 API（HarnessBuilder/WorkflowEngine/create_executor/judge）完全向后兼容，无需改动。
