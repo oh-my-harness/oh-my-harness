@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-21（eda-agent-py 全部 issue 清零：#24-#40 全部修复/关闭。ArcGen 88c1862 6 项对齐差距修复（ownership API + tried_decisions pipeline + beam_runner deviation + term_advisor 3 文件拆分 + ContextAdvisor KB stub + gauge_check LLM reporter）；83/83 测试通过）
+> 最后更新：2026-07-21（eda-agent-py 全部 issue 清零：#24-#43 全部修复/关闭。ArcGen 88c1862 6 项对齐 + runtime 恢复 API 接线（--resume/--restart-from/--list-runs，对齐 ArcGen CLI）；89/89 测试通过）
 
 ---
 
@@ -259,6 +259,10 @@ llm_adapter = { path = "../llm-api-adapter" }
 - **#39 ContextAdvisor KB 集成**：`build_context_with_react` 添加 `kb=None` 参数 + KB 读取逻辑；新增 `try_build_kb()`（返回 None）+ `write_context_to_kb()`（no-op）stub，接口对齐 ArcGen F-42。
 - **#40 gauge_check LLM reporter**：`result_analyzers.py` 添加 `GAUGE_CHECK_REPORTER_SYSTEM_PROMPT` + `build_gauge_check_reporter_prompt()`；`data_prep.py` 用 `single_llm_call_json` 替换 placeholder，对齐 ArcGen GaugeCheckReporter (F-48)。
 - 总测试 83/83 通过。commits d3aef0a → 413c2c0。
+
+**2026-07-21 变更（#43 runtime 恢复 API CLI 接线）**：
+- **#43 CLI 恢复 API 接线**：`run_workflow()` 接受 `task_store_dir`/`resume_task_id`/`restart_from_step` 参数；新 run 调 `with_task_store()` 持久化 + 写 `.task_id` 文件；CLI 新增 `--restart-from NODE`/`--list-runs`/`--task-id` flag；`--resume` 从空壳接线到 `engine.restore()`；`--list-runs` 调 `WorkflowEngine.list_tasks()` 打印表格。TaskStore 目录：`<job_dir>/.task_store/`。runtime issue #74 (`list_tasks()`) 已实现。
+- 总测试 89/89 通过。commit 44a6a34。
 
 **2026-07-21 变更**：
 - **Senza v0.4.6 升级**：从 v0.3.0 升级到 v0.4.6（跨 3 个版本）。`single_llm_call_json` 启用 `response_format(json_object)` 原生 JSON 模式（OpenAI 兼容 provider 受益，Anthropic 静默忽略走 regex fallback）。`single_llm_call` 新增 `json_mode` 参数。5 个新 FFI API 测试（response_format/fs_tools_plugin/after_turn_hook/structured_status）。67/67 测试通过。核心 API（HarnessBuilder/WorkflowEngine/create_executor/judge）完全向后兼容，无需改动。
