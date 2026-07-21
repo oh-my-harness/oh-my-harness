@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-21（eda-agent-py 全部 issue 清零：#24-#43 全部修复/关闭。ArcGen 88c1862 6 项对齐 + runtime 恢复 API 接线（--resume/--restart-from/--list-runs，对齐 ArcGen CLI）；89/89 测试通过）
+> 最后更新：2026-07-22（eda-agent-py 双跑对比完成：ArcGen vs eda-agent-py simple_case1 default mode。确定性阶段完全对齐（findoptics/optical/mask_params 精确匹配），LLM 驱动阶段路径不同（group 选择 ntd_1x vs ntd_Star，预期行为）。修复 #45（term_selection_lite _build_resist_model 缺 validation_uwrms/real_contributions/calibration_rms）+ #47（resist_tune/model_check validation_uwrms 未提取 → Check A 超时）。89/89 测试通过。）
 
 ---
 
