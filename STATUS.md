@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-22（eda-agent-py 双跑对比完成：ArcGen vs eda-agent-py simple_case1 default mode。确定性阶段完全对齐（findoptics/optical/mask_params 精确匹配），LLM 驱动阶段路径不同（group 选择 ntd_1x vs ntd_Star，预期行为）。修复 #45（term_selection_lite _build_resist_model 缺 validation_uwrms/real_contributions/calibration_rms）+ #47（resist_tune/model_check validation_uwrms 未提取 → Check A 超时）。89/89 测试通过。）
+> 最后更新：2026-07-24（eda-agent-py 0509 全量 case 双跑完成：ArcGen vs eda-agent-py amc_template_0509（1414 cal + 306 val gauges）。前 7 个阶段（data_clean → mask_search）逐字一致；term_selection 分歧根因为经验缓存数据不同（非代码 bug），edapy 无经验命中反而更优（cal_uwrms 4.72 vs 7.04）。确认完全无镜像/mock Python，所有运行直接基于 Senza .so 原生扩展 + 真实 PanGen。89/89 测试通过。）
 
 ---
 
@@ -234,6 +234,22 @@ llm_adapter = { path = "../llm-api-adapter" }
 
 
 ### eda-agent-py ✅ ArcGen 对齐 — E2E 全流程跑通
+
+**2026-07-24 0509 全量 case 双跑完成（amc_template_0509，1414 cal + 306 val gauges）**：
+
+- **Senza v1.0.0 / PanGen 2026.04.00 / Python 3.14**，完全无镜像/mock/容器，直接基于 Senza .so 原生扩展
+- **前 7 阶段逐字一致**：data_clean（1449→1414）→ gauge_check → calibration_context → prepare_wizard → findoptics（R²=0.999286）→ optical_search（focus=40.8, metro_p=46.0）→ mask_search（focus=43.8, metro_p=49.0, bias=-1.0）
+- **term_selection 分歧（非代码 bug）**：ArcGen 经验缓存命中 ntd_1x_2（相似度 80%，3 条 lessons 注入 prompt）→ 3 轮早停 PASS（cal_uwrms=7.04）；edapy 无经验命中 → 回退 ntd_ultra → 10 轮跑满 WARNING（cal_uwrms=4.72，反而更优）
+- **根因**：两个仓库 experience.jsonl 独立积累，ArcGen 有历史 ntd_1x_2 记录（7/8、7/10），edapy 从未跑过该工况。round0 baseline 一致（12.163 vs 12.168），排除仿真层差异
+- **耗时**：ArcGen ~13h22m（含 2h21m restart 间隙），edapy ~13h54m。term_selection 差异最大（2h49m vs 7h44m）
+- **产物路径**：ArcGen `/data/pangen_result/optical_search_20260723133912`，edapy `/data/pangen_result/dualrun_0509_edapy_20260723133658`
+- **结论**：代码逻辑完全对齐，分歧纯粹是经验缓存数据驱动。如需完全可复现，同步 experience.jsonl 即可
+
+**2026-07-24 确认无镜像 Python**：
+- `eda_agent_py/workflow_engine/`（原 mock WorkflowEngine）已废弃删除，目录为空
+- 所有运行和测试均直接 `import senza`（PyO3 .so 原生扩展），无 Docker/容器/代理层
+- `test_mock_pipeline.py` 虽名为 mock，实际使用真实 Senza WorkflowEngine，仅测试数据为最小化构造
+- CLAUDE.md 已同步更新，移除所有"镜像/mock"相关描述
 
 **2026-07-21 变更（#24-#26 + #33 全部修复）**：
 - **#24 ContextAdvisor (LLM ReAct)**：新增 （list_files/read_file/ask_user/submit_context 4 个工具 + schema）+ （build_context_with_react，通过 senza SDK HarnessBuilder tool calling + should_stop_hook 自动 ReAct 循环）。 在 llm-auto/llm-interactive 模式下无 calibration_context.json 时启动 ContextAdvisor 收集参数。
