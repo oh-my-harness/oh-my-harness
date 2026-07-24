@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-24（eda-agent-py 0509 全量 case 双跑完成：ArcGen vs eda-agent-py amc_template_0509（1414 cal + 306 val gauges）。前 7 个阶段（data_clean → mask_search）逐字一致；term_selection 分歧根因为经验缓存数据不同（非代码 bug），edapy 无经验命中反而更优（cal_uwrms 4.72 vs 7.04）。确认完全无镜像/mock Python，所有运行直接基于 Senza .so 原生扩展 + 真实 PanGen。89/89 测试通过。）
+> 最后更新：2026-07-24（eda-agent-py 对齐 ArcGen 284c53c bug 修复：TNP 对调修复（amc_template 自动生效）+ Check E PASS→WARNING + term 名归一化 + validation_source=none 模式 + 取消 PASS 提前终止 + retry 独立目录隔离 + 校准报告增强。9 处代码变更同步，issue #52。89/89 测试通过。此前 0509 全量 case 双跑完成：前 7 阶段逐字一致，term_selection 分歧为经验缓存数据驱动（非代码 bug）。完全无镜像/mock Python。）
 
 ---
 
@@ -234,6 +234,20 @@ llm_adapter = { path = "../llm-api-adapter" }
 
 
 ### eda-agent-py ✅ ArcGen 对齐 — E2E 全流程跑通
+
+**2026-07-24 对齐 ArcGen 284c53c bug 修复（issue #52）**：
+
+ArcGen `a522e38..284c53c` 包含关键 bug 修复（TNP 推导值对调导致校准质量差）+ 质量增强。eda-agent-py 同步 9 处变更：
+
+- **TNP 对调修复**（`fit_model_bo_mask.py` / `fit_resist_model_ntd_w7.py`）：Dark/Clear Field trans 值互换。eda-agent-py 直接引用 ArcGen `amc_template/` 目录，拉取后自动生效
+- **Check E**：`cal_uwrms≥1.5` 从 PASS 改为 WARNING（模型尚未充分拟合，过拟合检查暂缓）
+- **term 名归一化**：LLM 输出 term 名（`Ax_3`）时自动去掉 `_N` 后缀匹配 operation 名（`Ax`），影响 `effectiveness_check.py` + `term_advisor_ops.py`
+- **beam_runner**：`CandidateResult` 新增 `cal_rms` 字段（从 `finalrms` 读取），p1_ratio 日志增加 cal_uwrms/cal_rms/val_uwrms
+- **validation_source=none**：schema 新增 `"none"` 值（不做 validation），`_detect_validation_source` 支持用户显式指定，`gauge_group` 处理三种模式
+- **gauge_check auto 模式**：auto 模式直接删除 FAIL gauge，不再交互询问
+- **校准报告增强**：fallback 报告新增 `_format_check_detail()`，4 列检查表 + validation_uwrms/threshold/model_path/term 列表
+- **取消 PASS 提前终止**：Round 0 和后续轮次 PASS 后不再 break，跑满全部轮次
+- **retry 独立目录隔离**：retry 模式使用 `retry_N/` 子目录，symlink 大文件 + 复制小文件 + 保留缩窄的 `term_pool.json`
 
 **2026-07-24 0509 全量 case 双跑完成（amc_template_0509，1414 cal + 306 val gauges）**：
 
