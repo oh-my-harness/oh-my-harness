@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-24（eda-agent-py 对齐 ArcGen 284c53c bug 修复：TNP 对调修复（amc_template 自动生效）+ Check E PASS→WARNING + term 名归一化 + validation_source=none 模式 + 取消 PASS 提前终止 + retry 独立目录隔离 + 校准报告增强。9 处代码变更同步，issue #52。89/89 测试通过。此前 0509 全量 case 双跑完成：前 7 阶段逐字一致，term_selection 分歧为经验缓存数据驱动（非代码 bug）。完全无镜像/mock Python。）
+> 最后更新：2026-07-25（eda-agent-py simple_case1 V2 验证通过：term_selection_lite `select_initial_group` re-export 修复确认有效，10 轮迭代无 SIGSEGV 崩溃，33 步 pipeline 全部成功。cal_uwrms=0.025, val_uwrms=0.275。commit 1ef3501。issue #52 已关闭。完全无镜像/mock Python，直接基于 Senza v1.0.4 + PanGen 2026.04.00。）
 
 ---
 
@@ -234,6 +234,19 @@ llm_adapter = { path = "../llm-api-adapter" }
 
 
 ### eda-agent-py ✅ ArcGen 对齐 — E2E 全流程跑通
+
+**2026-07-25 simple_case1 V2 验证通过（issue #52 修复确认）**：
+
+V1 在 term_selection_lite Round 0 因 `term_advisor_lite.py` 缺少 `select_initial_group` re-export → PanGen `ImportError` → SIGSEGV（rc=-11）。V2 修复后（commit `1ef3501`）重跑：
+
+- **33 步全部成功**：init_job → data_clean → gauge_check → gauge_group → prepare_wizard → findoptics（R²=0.997）→ optical_search（focus=39.8, metro_p=41.0）→ mask_search（bias=1.0, out_corner=5.0）→ **term_selection_lite 10 轮无崩溃** → resist_tune → model_check → calibration_report
+- **关键修复确认**：term_selection_lite Round 0–10 全部 rc=0，`select_initial_group` import 正常
+- **模型质量**：cal_uwrms=0.025, val_uwrms=0.275（val 高因 small_case1 仅 4 val gauges，属正常）
+- **产物**：optical_result.json + mask_params.json + selected_terms.json（13 terms）+ resist_model.json + calibration_report.md
+- **Job dir**：`/data/pangen_result/simple_verify_edapy_v2_20260725141624`
+- **耗时**：~65 分钟（14:16–15:21），findoptics 22min + optical_search 22min + mask_search 8min + term_selection 10min + resist_tune 3min
+- **结论**：链路完全通顺，可进入 0509 全量 case 双跑
+
 
 **2026-07-24 对齐 ArcGen 284c53c bug 修复（issue #52）**：
 
