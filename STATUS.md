@@ -489,3 +489,23 @@ model_check_feedback → calibration_report 全部通过。
   - workspace reset：仅清空工作目录，外部文件存活 ✓
   - fs_allowlist 授权读取 ✓；注入环境变量可见 ✓；工作目录文件可访问 ✓
 - **全量验证**：`cargo test --workspace` 762 测试全通过；`cargo clippy` 零警告。
+
+### 2026-07-29 runtime issue #97 round-2：审查缺口全部封闭（commit 86fa2ef）
+
+- **背景**：round-1（9e9edd3）提交后收到安全审查，列出 7 项缺口（3×P0、3×P1、1×P2）。round-2 逐项修复并验证。
+- **P0 文件 API 绕过 bwrap**：`BwrapEnv` 的 read/write/list/remove/file_info 全部经 `check_path()` 校验，路径必须在 work_dir 或 `fs_allowlist` 内；绝对路径、`..` 遍历、跨目录逃逸均被拒。
+- **P0 配置静默降级**：`BwrapSandbox::new()` 改为 `Result<Self>`，`validate_config()` 对 `fs_denylist`、`net_allowlist` 规则、`max_cpus/max_memory_mb/max_disk_mb` 直接 bail（fail-closed），不再静默放宽。
+- **P0 /etc 暴露**：`system_ro_binds()` 移除 `/etc`（不再泄露 `/etc/passwd`、`/etc/shadow` 等）。
+- **P1 reset() 误删宿主目录**：新增 `is_safe_disposable_root()`，拒绝根路径、当前工作目录及其祖先；`reset()` 调用前先校验。
+- **P1 进程树未回收**：抽取共享 `drain_child_output()`（sandbox-os/src/shell_runner.rs），超时/abort 时 `start_kill()` + `wait()`；bwrap `--unshare-all` 使其成为 PID namespace init，杀死后内核回收整个进程树。sentinel 测试验证后台子进程被终止。
+- **P1 测试假绿**：bwrap 依赖测试改为 `#[ignore = "requires bwrap; run with --include-ignored"]`，默认 `cargo test` 报告 "ignored"（不再是假 "passed"）；`require_bwrap()` 在 `--include-ignored` 且 bwrap 缺失时 panic（大声失败）。不依赖 bwrap 的测试（config 校验、文件 API 路径检查、reset 安全）始终运行。
+- **P2 耦合/重复**：`drain_child_output` 抽到 sandbox-os 共享，`utf8_safe_boundary` 恢复为私有，不再跨 crate 暴露。
+- **验证**：bwrap 19 测试全过（`--include-ignored`，真实 bwrap 0.4.0）；sandbox-os 15 测试全过；三 crate `clippy -D warnings` 零警告；`cargo build --workspace --all-targets` 通过。默认 `cargo test -p sandbox-bwrap` = 9 passed / 10 ignored（诚实）。
+- **CI 提示**：Linux CI 需安装 bwrap 并用 `cargo test -- --include-ignored` 才会执行真实隔离测试。
+
+### 2026-07-29 llm-harness-multi-agent 调查：测试状态与触发条件
+
+- **仓库**：`oh-my-harness/llm-harness-multi-agent`，固定 runtime rev `1be6859`。P0–P3 已完成，P4（生产资格验证）进行中。
+- **是否测过**：是，但仅用 mock。14 单元测试 + 22 workflow 测试全过（`MockLlmClient` + `ScriptedCriticRunner`）。唯一的真实 LLM 端到端测试 `codex_login_produces_audited_runtime_workflow_review` 带 `#[ignore]`（需本地 Codex login + live 请求），默认不跑。即：确定性逻辑有 mock 覆盖，真实模型 E2E 未跑。
+- **何时触发多 Agent**：不自动触发。它是一个 workflow review checkpoint——在 runtime `WorkflowEngine` 里把某个 step 的 executor 注册为 `MultiAgentReviewExecutor`，workflow 走到该 step 时才调用。Critic 以独立 LLM session（隔离上下文，只看产物快照 + rubric）审查 Doer 的产物，路由到 `pass` / `revise` / `escalate` / `abort`。需显式在 workflow 配置中接入，背后由 `runtime` feature 开关。
+- **结论**：多 Agent 目前是"可接线、有 mock 验证"的 checkpoint 机制，尚未在真实 LLM 下端到端验证过，也未接入任何生产 workflow。
