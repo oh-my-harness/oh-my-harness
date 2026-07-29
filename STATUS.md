@@ -464,3 +464,28 @@ model_check_feedback → calibration_report 全部通过。
 - **G6/G7 已暴露**：PyO3 SDK 已暴露 `restore()` / `pause/resume/cancel`（default 模式暂未使用）
 - Issues：#5（stall detection 已移除）、#6（beam_runner calibration_context.json 已修）
 - 43/43 测试通过，CLAUDE.md 已更新
+
+### 2026-07-29 runtime issue #97 修复：BwrapSandbox 真实隔离 + SeatbeltSandbox fail-closed
+
+- **问题**（issue #97）：`BwrapSandbox` 和 `SeatbeltSandbox` 的 `env()` 返回无限制的 `OsEnv`，声称提供 OS 级隔离但实际未执行任何隔离——`start()` 仅验证二进制存在，`build_bwrap_args()`/`build_sandbox_profile()` 被 `#[cfg(test)]` 限定，生产代码从不调用。
+- **BwrapSandbox（Linux）修复——option 1，真实 bwrap 隔离**：
+  - 新增 `BwrapEnv`（`ExecutionEnv` 实现）：文件操作委托 `OsEnv`，`execute_shell` 通过 `bwrap --unshare-all` 在独立 mount/net/pid namespace 中执行每条命令。
+  - 隔离机制：`--ro-bind-try` 绑定系统目录（/usr /etc /bin /lib /lib64 /sbin）；`--bind` 绑定工作目录 + `fs_allowlist`；`--tmpfs /tmp`；`--proc /proc --dev /dev`；`--die-with-parent --new-session`。
+  - 环境隔离：`env -i` 清空所有环境变量，仅注入 `PATH`、`HOME` 和调用方指定的变量——主机凭证（API key、token）不继承。
+  - 网络隔离：`net_allowlist` 为空时 `--unshare-all` 阻断网络；非空时 `--share-net`。
+  - `reset()`：清空工作目录（disposable root），不影响外部路径。
+  - `start()`：验证 bwrap 可用性，不可用时 fail-closed。
+  - 复用 `OsEnv::execute_shell` 的 drain/timeout/abort 逻辑（`utf8_safe_boundary` 已从 sandbox-os 导出为 pub）。
+- **SeatbeltSandbox（macOS）修复——option 2，fail-closed**：
+  - `start()` 返回错误（sandbox-exec 策略编译未实现）。
+  - `env()` 返回 `UnsupportedEnv`（所有操作返回 `EnvError::Other`），不再返回无限制 `OsEnv`。
+  - 移除了未使用的 `llm-harness-runtime-sandbox-os` 依赖。
+- **测试**（11 个，全部通过，通过 `sandbox.env().execute_shell()` 执行真实命令）：
+  - 文件系统隔离：shell 命令无法读取 allowlist 之外的宿主文件 ✓
+  - 网络隔离：空 net_allowlist 阻断网络（`/dev/tcp/8.8.8.8/53` → "Network is unreachable"）✓
+  - 凭证隔离：主机环境变量（USER/LANG/HOSTNAME/LOGNAME/TERM）不泄露 ✓
+  - 超时杀进程树：`sleep 30` + 2s timeout → 2s 内终止 ✓
+  - abort 取消：CancellationToken 取消运行中命令 ✓
+  - workspace reset：仅清空工作目录，外部文件存活 ✓
+  - fs_allowlist 授权读取 ✓；注入环境变量可见 ✓；工作目录文件可访问 ✓
+- **全量验证**：`cargo test --workspace` 762 测试全通过；`cargo clippy` 零警告。
