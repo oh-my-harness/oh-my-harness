@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-25（eda-agent-py simple_case1 V2 验证通过：term_selection_lite `select_initial_group` re-export 修复确认有效，10 轮迭代无 SIGSEGV 崩溃，33 步 pipeline 全部成功。cal_uwrms=0.025, val_uwrms=0.275。commit 1ef3501。issue #52 已关闭。完全无镜像/mock Python，直接基于 Senza v1.0.4 + PanGen 2026.04.00。）
+> 最后更新：2026-07-30（runtime issue #97 round-3：BwrapSandbox 改用 cap-std 能力文件系统彻底封闭符号链接逃逸；CI 新增 Linux bwrap 安装 + --include-ignored 隔离测试门禁。25 测试全过。）
 
 ---
 
@@ -502,6 +502,20 @@ model_check_feedback → calibration_report 全部通过。
 - **P2 耦合/重复**：`drain_child_output` 抽到 sandbox-os 共享，`utf8_safe_boundary` 恢复为私有，不再跨 crate 暴露。
 - **验证**：bwrap 19 测试全过（`--include-ignored`，真实 bwrap 0.4.0）；sandbox-os 15 测试全过；三 crate `clippy -D warnings` 零警告；`cargo build --workspace --all-targets` 通过。默认 `cargo test -p sandbox-bwrap` = 9 passed / 10 ignored（诚实）。
 - **CI 提示**：Linux CI 需安装 bwrap 并用 `cargo test -- --include-ignored` 才会执行真实隔离测试。
+
+### 2026-07-30 runtime issue #97 round-3：cap-std 能力文件系统 + CI 真实隔离门禁
+
+- **背景**：round-2（86fa2ef）后第二轮审查发现 round-2 的词法路径检查仍可被符号链接绕过（P0），`reset()` 可删除 `/tmp`（P0），`create_temp_dir()` 写入宿主 `/tmp`（P1），配置级 timeout 被忽略（P1），CI 未执行 bwrap 测试（P1），`cargo fmt --check` 失败（P1），能力检查仅测 `--version`（P2）。round-3 用 cap-std 能力文件系统彻底修复。
+- **P0 符号链接逃逸**：所有文件操作改为通过 `cap_std::fs::Dir` 能力对象执行。每个允许根（work_dir + fs_allowlist）在构造时以 ambient authority 打开一次，后续 read/write/list/remove/exists/create_dir/file_info/append 全部委托给 `Dir` handle。cap-std 在 syscall 层阻止 `..` 遍历、绝对路径逃逸和符号链接逃逸——不再存在检查与使用分离（TOCTOU）。
+- **P0 reset() 误删共享目录**：`is_safe_disposable_root()` 现在 canonicalize 路径，拒绝根 `/`、少于 2 个路径分量的浅路径（如 `/tmp`、`/home`）、当前工作目录及其祖先。`reset()` 调用前先校验。
+- **P1 create_temp_dir() 写入宿主 /tmp**：改为在 workspace 内通过 cap-std `Dir::create_dir` 创建，返回路径在 work_dir 下。
+- **P1 配置级 timeout 被忽略**：`execute_shell` 现在取 `min(opts.timeout, config_timeout)` 作为强制上限；若调用方未设 timeout，则用 config timeout。
+- **P1 CI 未执行 bwrap 测试**：`.github/workflows/ci.yml` 新增 Linux 步骤安装 bubblewrap + `cargo test -p llm-harness-runtime-sandbox-bwrap -- --include-ignored`。
+- **P1 cargo fmt 失败**：已 `cargo fmt --all`，`--check` 通过。
+- **P2 能力检查不充分**：`run_bwrap_probe()` 运行真实 `bwrap --unshare-all ... true`（不是仅 `--version`），使用 `system_ro_binds()`（含 `/lib64`/`/sbin`）+ `env_clear()`。`BwrapEnv::new` 改为 `pub(crate)` 防止绕过 `validate_config`。
+- **修复 bug**：初版 `check_bwrap_available()` 硬编码 `/usr`/`/bin`/`/lib` ro-bind 但遗漏 `/lib64`，导致 RHEL 上 `/usr/bin/env` 因找不到动态链接器而 execvp 失败，全部 11 个 bwrap 测试失败。改用 `BwrapEnv::system_ro_binds()` 后修复。
+- **测试修复**：原 `bwrap_sandbox_start_fails_when_unavailable` 测试要求 bwrap 不存在，在 bwrap 存在的机器上 `--include-ignored` 会 panic。替换为 `bwrap_probe_fails_when_binary_missing`——用不存在的二进制路径测试 probe 的 not-found 错误路径，任何机器都能跑。
+- **验证**：bwrap 25 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18）；workspace 全量测试 0 失败；`cargo fmt --check` 通过；`cargo clippy --workspace --all-targets --all-features -- -D warnings` 零警告；`cargo build --workspace --all-targets` 通过。默认 `cargo test -p sandbox-bwrap` = 15 passed / 10 ignored。
 
 ### 2026-07-29 llm-harness-multi-agent 调查：测试状态与触发条件
 
