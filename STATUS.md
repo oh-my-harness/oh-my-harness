@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-30（runtime issue #97 round-7：移除裸 PID 注册表，drain_child_output 内置 shutdown kill+wait，kill_on_drop，可交换 shutdown token，shutdown 锁超时不删 workspace。41 测试全过。）
+> 最后更新：2026-07-30（runtime issue #97 round-8：epoch 线性化（acquire_op_lock 返回 token），ReapGuard 保证 drop 时 reap（不依赖 kill_on_drop），恢复 drain_child_output 原始签名。43 测试全过。）
 
 ---
 
@@ -544,6 +544,25 @@ model_check_feedback → calibration_report 全部通过。
 - **活跃子进程注册表**：`active_children: Mutex<Vec<u32>>` 存储 bwrap 子进程 PID。`register_child()` 在 `execute_shell` 中注册 PID，`ChildGuard` 在 drop 时移除。`kill_active_children()` 通过 `kill(2)` FFI 发送 SIGKILL，bwrap `--new-session` 使内核回收整个进程树。
 - **契约缺口**：`reset()` 现在对所有 caller-provided `work_dir` fail-closed（仅 `work_dir=None` 的 owned 目录可 reset）。所有权/capability 由 `owned: bool` 内存字段显式标记，不再从 `Option<PathBuf>` 推断。
 - **验证**：bwrap 36 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18）；新增 2 项回归测试（无 timeout 命令的 有界 shutdown、排队中取消感知）；workspace 全量测试 0 失败；`cargo fmt --check` 通过；`cargo clippy --workspace --all-targets --all-features -- -D warnings` 零警告；`cargo build --workspace --all-targets` 通过。
+
+### 2026-07-30 runtime issue #97 round-7：移除裸 PID 模型 + drain 内置 shutdown + kill_on_drop + 可交换 token
+
+- **背景**：round-6（2c471b1）后第六轮审查发现三个生产阻断缺陷：(P0) `shutdown()` 不检查锁超时 `Err(Elapsed)`，直接 `remove_dir_all` 删除 workspace；(P0) spawn/register 竞态——child 在 spawn 后、register 前遇到 shutdown，cancel 分支丢弃 `drain_child_output` future 但不 kill/wait child；(P0/P1) 裸 PID 所有权模型不安全——`ChildGuard::drop()` 用 `try_lock()` 失败时残留 PID，后续 `kill(pid, SIGKILL)` 不 wait/reap，PID 复用可能误杀宿主无关进程。
+- **P0 shutdown 锁超时不删 workspace**：`shutdown()` 用 `match` 检查 `tokio::time::timeout(SHUTDOWN_KILL_GRACE, reset_lock.lock())` 的 `Err(Elapsed)` 分支，超时时返回 `Err("shutdown timed out waiting for lock; workspace preserved")` 并不删除 workspace。
+- **P0 drain 内置 shutdown kill+wait**：`drain_child_output()` 新增 `shutdown: Option<CancellationToken>` 参数，在两个 `select!` 中增加 biased `shutdown_token.cancelled()` 分支，触发时 `start_kill()` + `wait().await` + 返回 `EnvError::Other`。`execute_shell` 不再有外层 `select!`。
+- **P0 kill_on_drop**：`execute_shell` 在 `Command` 上设置 `kill_on_drop(true)`。
+- **P0 移除裸 PID 模型**：删除 `kill_process()` 函数、`libc_kill` FFI、`active_children` 注册表、`ChildGuard`、`kill_active_children()`。所有子进程生命周期由 `tokio::process::Child` 句柄管理。
+- **可交换 shutdown token**：`shutdown_token` 从 `CancellationToken` 改为 `std::sync::Mutex<CancellationToken>`。`reset()` 通过 `swap_shutdown_token()` 原子替换为新 token 并取消旧 token。`shutdown()` 通过 `cancel_shutdown_token()` 取消当前 token。
+- **验证**：bwrap 41 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18）；新增 5 项确定性回归测试。
+
+### 2026-07-30 runtime issue #97 round-8：epoch 线性化 + ReapGuard 保证 drop reap + 恢复原始签名
+
+- **背景**：round-7（849ce51）后第七轮审查发现两个 P1：(P1) reset token epoch 不线性化——命令通过 acquire_op_lock 后再次 clone token，若 reset 恰好在两次 clone 之间 swap，已获准命令拿到新 token 逃过 reset 取消，确定性探针复现 reset 超时；(P1) 直接 drop/abort future 时不保证 reap——只依赖 kill_on_drop(true)，Tokio 明确说明 Drop 无法 await 子进程，只提供后台 best-effort reap。另外 no_orphan 测试基线测量有误；共享 drain_child_output 的公开签名被不必要地修改。
+- **P1 epoch 线性化**：`acquire_op_lock()` 返回 `(MutexGuard, CancellationToken)`——在锁获取时 snapshot 当前 token 并返回给调用方。`execute_shell` 使用返回的 token（不再从字段重新 clone），保证 token epoch 线性化。所有文件 API 调用方更新为解构 `(guard, token)` 元组。
+- **P1 ReapGuard 保证 drop reap**：新增 `ReapGuard` 结构体拥有 `tokio::process::Child`，Drop 时 `start_kill()` + `tokio::spawn(async { child.wait().await })` 后台 reap。新增 `drain_child_output_guarded(child, opts, shutdown)` 函数使用 ReapGuard——所有取消路径通过 `guard.kill_and_wait().await` kill+wait，future 被 drop 时 ReapGuard 的 Drop 保证后台 reap。移除了 `kill_on_drop(true)`。
+- **恢复 drain_child_output 原始签名**：`drain_child_output(child, opts)` 恢复为 2 参数（无源码级破坏）。新增 `drain_child_output_guarded` 作为 bwrap 专用函数。OsEnv 继续使用原始 `drain_child_output`。
+- **no_orphan 测试修复**：改为 sentinel 文件方式——命令 `sleep 3 && touch sentinel.txt`，shutdown 后等待 4s 验证 sentinel 不存在。不再依赖 `pgrep -c bwrap` 全局进程计数。
+- **验证**：bwrap 43 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18，并行执行）；新增 2 项确定性测试（reset epoch 线性化、dropped future 保证 reap）；sandbox-os 15 测试全过；workspace 全量测试 0 失败；`cargo fmt --check` 通过；`cargo clippy --workspace --all-targets -- -D warnings` 零警告。
 
 ### 2026-07-29 llm-harness-multi-agent 调查：测试状态与触发条件
 
