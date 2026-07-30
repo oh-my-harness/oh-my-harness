@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-30（runtime issue #97 round-4：修复 reset 所有权模型 4 项缺口——Dir handle 失效、/var/lib 放行、work_dir=None 共享、symlink canonicalize 违约。29 测试全过。）
+> 最后更新：2026-07-30（runtime issue #97 round-5：sentinel 所有权模型改为内存 owned 标记 + 0700 权限 + tokio Mutex 互斥 + shutdown 清理。34 测试全过。）
 
 ---
 
@@ -525,6 +525,16 @@ model_check_feedback → calibration_report 全部通过。
 - **P0 work_dir=None 共享 /tmp/sandbox-bwrap**：多个 sandbox 使用相同默认路径，存在跨 Agent 文件泄露和相互 reset。改为 `work_dir=None` 时生成 `/tmp/sandbox-bwrap-<uuid>` 唯一路径。
 - **P0 symlink work_dir 被静默 canonicalize**：`BwrapEnv::new()` 原先将 canonical 路径存入 `work_dir`，`working_dir()` 返回 canonical 路径而非配置路径。拆分为 `work_dir`（配置路径，`working_dir()` 返回此值）和 `work_dir_canon`（canonical 路径，cap-std Dir、bwrap bind/chdir、路径路由使用此值）。
 - **验证**：bwrap 29 测试全过（`--include-ignored`，真实 bwrap 0.4.0）；4 项新测试（reset 保留文件 API、系统目录拒绝、work_dir=None 唯一性、symlink workdir 契约）全过；workspace build/clippy/fmt 全部通过。
+
+### 2026-07-30 runtime issue #97 round-5：内存所有权模型 + 0700 权限 + 互斥锁 + shutdown 清理
+
+- **背景**：round-4（ab8b099）引入 sentinel 文件所有权模型后，第四轮审查发现 sentinel 方案存在根本缺陷：sentinel 位于 Agent 可写目录内、构造器可主动认领任意既有目录、目录权限为 0755、shutdown 不清理、reset 与执行操作无互斥。round-5 彻底废弃 sentinel，改为内存所有权标记。
+- **P0 sentinel 不能证明目录所有权**：构造器原先给任何通过路径启发式检查的既有目录写 sentinel，`/var/lib/dpkg` 等系统子树可被"认领"后 reset 清空。改为 `owned: bool` 内存字段——仅 `work_dir=None`（自动生成）时 `owned=true`，调用方提供的目录 `owned=false`。`reset()` 仅对 `owned=true` 执行，`owned=false` 直接拒绝。删除 `SYSTEM_DIRECTORIES`、`is_system_directory`、`is_potentially_disposable`、`SENTINEL_NAME`、`place_sentinel`、`is_safe_disposable_root`。
+- **P0 默认 workspace 权限 0755**：`create_dir_all()` 受 umask 控制，同机其他 Unix 用户可读 Agent 文件。改为 `std::fs::DirBuilder::new().recursive(true).mode(0o700)` 创建自动生成目录，绕过 umask。
+- **P1 Agent 可删除 sentinel 使 reset 失效**：sentinel 位于 Agent 可写 workspace 内，`remove(".bwrap-disposable")` 后 reset 永久拒绝。所有权改为内存 `owned: bool`，Agent 无法篡改进程内状态。
+- **P1 shutdown 不清理自动生成目录**：`shutdown()` 原为空操作，`/tmp/sandbox-bwrap-<uuid>` 残留。改为 `owned=true` 时 `shutdown()` 获取锁并 `remove_dir_all`；`owned=false` 时不删除调用方目录。
+- **reset 与执行操作无互斥**：运行中 Agent 可在清理期间重新创建内容，reset 空目录后置条件无保证。新增 `reset_lock: tokio::sync::Mutex<()>` 字段，`reset()`、`shutdown()`、`execute_shell()` 和全部文件 API 方法（read/write/list/remove/exists/create_dir/create_temp_dir/file_info/append）均获取锁，确保互斥。
+- **验证**：bwrap 34 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18）；新增 8 项测试覆盖所有权（reset 清空 owned 目录、拒绝 caller-provided 目录、拒绝 /var/lib、0700 权限、Agent 无法破坏 reset、shutdown 删除 owned 目录、shutdown 保留 caller 目录、reset 保留文件 API）；workspace 全量测试 0 失败；`cargo fmt --check` 通过；`cargo clippy --workspace --all-targets --all-features -- -D warnings` 零警告；`cargo build --workspace --all-targets` 通过。
 
 ### 2026-07-29 llm-harness-multi-agent 调查：测试状态与触发条件
 
