@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-30（runtime issue #97 round-3：BwrapSandbox 改用 cap-std 能力文件系统彻底封闭符号链接逃逸；CI 新增 Linux bwrap 安装 + --include-ignored 隔离测试门禁。25 测试全过。）
+> 最后更新：2026-07-30（runtime issue #97 round-4：修复 reset 所有权模型 4 项缺口——Dir handle 失效、/var/lib 放行、work_dir=None 共享、symlink canonicalize 违约。29 测试全过。）
 
 ---
 
@@ -516,6 +516,15 @@ model_check_feedback → calibration_report 全部通过。
 - **修复 bug**：初版 `check_bwrap_available()` 硬编码 `/usr`/`/bin`/`/lib` ro-bind 但遗漏 `/lib64`，导致 RHEL 上 `/usr/bin/env` 因找不到动态链接器而 execvp 失败，全部 11 个 bwrap 测试失败。改用 `BwrapEnv::system_ro_binds()` 后修复。
 - **测试修复**：原 `bwrap_sandbox_start_fails_when_unavailable` 测试要求 bwrap 不存在，在 bwrap 存在的机器上 `--include-ignored` 会 panic。替换为 `bwrap_probe_fails_when_binary_missing`——用不存在的二进制路径测试 probe 的 not-found 错误路径，任何机器都能跑。
 - **验证**：bwrap 25 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18）；workspace 全量测试 0 失败；`cargo fmt --check` 通过；`cargo clippy --workspace --all-targets --all-features -- -D warnings` 零警告；`cargo build --workspace --all-targets` 通过。默认 `cargo test -p sandbox-bwrap` = 15 passed / 10 ignored。
+
+### 2026-07-30 runtime issue #97 round-4：reset 所有权模型 + 4 项测试覆盖缺口
+
+- **背景**：round-3 提交后第三轮审查确认 25 测试全过，但指出 4 项未被测试覆盖的场景，补充探针后全部失败。round-4 逐项修复。
+- **P0 reset() 使 Dir handle 失效**：`reset()` 原先执行 `remove_dir_all` + `create_dir_all`，导致 cap-std `Dir` 能力对象指向已删除 inode，后续 `write_file()` 返回 NotFound。改为 `clear_work_dir_contents()`——通过 `Dir` handle 遍历并删除所有条目（使用 `symlink_metadata` 防止跟随符号链接），不销毁目录 inode，`Dir` handle 保持有效。reset 后 `write_file()` / `read_text_file()` 正常工作。
+- **P0 /var/lib 通过 is_safe_disposable_root**：`/var/lib` 有 2 个路径分量且非 cwd，原检查放行。新增两道防线：(1) `SYSTEM_DIRECTORIES` 常量列出 22 个已知系统目录（/var/lib、/var/log、/etc、/usr 等），`is_system_directory()` 检查 canonical 路径是否命中；(2) sentinel 文件 `.bwrap-disposable`——`BwrapEnv::new()` 仅在 `is_potentially_disposable()` 通过时写入 sentinel，`is_safe_disposable_root()` 要求 sentinel 存在才放行。/var/lib 不满足 `is_potentially_disposable()` → 不写 sentinel → reset 拒绝。
+- **P0 work_dir=None 共享 /tmp/sandbox-bwrap**：多个 sandbox 使用相同默认路径，存在跨 Agent 文件泄露和相互 reset。改为 `work_dir=None` 时生成 `/tmp/sandbox-bwrap-<uuid>` 唯一路径。
+- **P0 symlink work_dir 被静默 canonicalize**：`BwrapEnv::new()` 原先将 canonical 路径存入 `work_dir`，`working_dir()` 返回 canonical 路径而非配置路径。拆分为 `work_dir`（配置路径，`working_dir()` 返回此值）和 `work_dir_canon`（canonical 路径，cap-std Dir、bwrap bind/chdir、路径路由使用此值）。
+- **验证**：bwrap 29 测试全过（`--include-ignored`，真实 bwrap 0.4.0）；4 项新测试（reset 保留文件 API、系统目录拒绝、work_dir=None 唯一性、symlink workdir 契约）全过；workspace build/clippy/fmt 全部通过。
 
 ### 2026-07-29 llm-harness-multi-agent 调查：测试状态与触发条件
 
