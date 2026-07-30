@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-30（runtime issue #97 round-8：epoch 线性化（acquire_op_lock 返回 token），ReapGuard 保证 drop 时 reap（不依赖 kill_on_drop），恢复 drain_child_output 原始签名。43 测试全过。）
+> 最后更新：2026-07-30（runtime issue #97 round-9：ReapGuard 改用 std::thread::spawn + try_wait() 轮询实现 runtime-independent reap；新增 Resetting lifecycle state 原子关闭 reset 期间 admission。44 bwrap + 19 sandbox-os 测试全过。）
 
 ---
 
@@ -563,6 +563,14 @@ model_check_feedback → calibration_report 全部通过。
 - **恢复 drain_child_output 原始签名**：`drain_child_output(child, opts)` 恢复为 2 参数（无源码级破坏）。新增 `drain_child_output_guarded` 作为 bwrap 专用函数。OsEnv 继续使用原始 `drain_child_output`。
 - **no_orphan 测试修复**：改为 sentinel 文件方式——命令 `sleep 3 && touch sentinel.txt`，shutdown 后等待 4s 验证 sentinel 不存在。不再依赖 `pgrep -c bwrap` 全局进程计数。
 - **验证**：bwrap 43 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18，并行执行）；新增 2 项确定性测试（reset epoch 线性化、dropped future 保证 reap）；sandbox-os 15 测试全过；workspace 全量测试 0 失败；`cargo fmt --check` 通过；`cargo clippy --workspace --all-targets -- -D warnings` 零警告。
+
+### 2026-07-30 runtime issue #97 round-9：runtime-independent ReapGuard + Resetting lifecycle 关闭 reset admission race
+
+- **背景**：round-8（76aafde）后第八轮审查发现两个 P1：(P1) ReapGuard 的 Drop 用 `tokio::spawn` 后台 reap，但 Tokio runtime 关闭时 task 可能在 poll 前被取消，且无 runtime 时 Drop 不触发任何 reap；`kill_and_wait()` 无论 `wait()` 成功与否都设 `reaped=true`。(P1) `reset()` 在 token swap 和 lock 获取之间不关闭 admission，新命令可能拿到未取消的新 token 滑入，导致 reset 超时。
+- **P1 ReapGuard runtime-independent reap**：Drop 中的 `tokio::spawn` 替换为 `std::thread::spawn` + `try_wait()` 轮询循环（10ms 间隔）。OS 线程独立于 Tokio runtime 生命周期——runtime 关闭后或无 runtime 时仍能完成 reap。`kill_and_wait()` 仅在 `wait().await.is_ok()` 时设 `reaped=true`，失败时 Drop 仍尝试 reap。
+- **P1 Resetting lifecycle 关闭 admission**：新增 `Resetting` 生命周期状态（Running→Resetting→Running）。`begin_reset()` 在 token swap 前原子转 Running→Resetting，`acquire_op_lock()` 在 pre-lock 和 post-lock 两处检查 `lifecycle != Running` 即拒绝，使 reset 期间新操作被立即拒绝而非排队等待。`finish_reset()` 重开 admission；超时时回滚到 Running。`begin_shutdown()` 同时接受 Running 和 Resetting 作为合法起始状态。
+- **新增测试**：`reset_closes_admission_atomically`（手动持锁使 reset 阻塞在 lock 获取阶段，验证 Resetting 状态下新命令被拒绝，释放锁后 reset 快速完成并恢复可用）；sandbox-os 新增 4 项 ReapGuard 单元测试（无 runtime、runtime 关闭中、runtime 存活、kill_and_wait reaped 标记）。
+- **验证**：bwrap 44 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18，并行执行）；sandbox-os 19 测试全过（15 原有 + 4 ReapGuard）；workspace 全量测试 0 失败；`cargo fmt --all -- --check` 通过；`cargo clippy --workspace --all-targets -- -D warnings` 零警告。
 
 ### 2026-07-29 llm-harness-multi-agent 调查：测试状态与触发条件
 
