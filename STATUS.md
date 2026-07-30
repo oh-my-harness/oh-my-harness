@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-30（runtime issue #97 round-6：生命周期状态机 + 内部 cancellation token + 活跃子进程注册表 + 有界 shutdown + 排队取消感知。36 测试全过。）
+> 最后更新：2026-07-30（runtime issue #97 round-7：移除裸 PID 注册表，drain_child_output 内置 shutdown kill+wait，kill_on_drop，可交换 shutdown token，shutdown 锁超时不删 workspace。41 测试全过。）
 
 ---
 
