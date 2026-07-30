@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-30（runtime issue #97 round-5：sentinel 所有权模型改为内存 owned 标记 + 0700 权限 + tokio Mutex 互斥 + shutdown 清理。34 测试全过。）
+> 最后更新：2026-07-30（runtime issue #97 round-6：生命周期状态机 + 内部 cancellation token + 活跃子进程注册表 + 有界 shutdown + 排队取消感知。36 测试全过。）
 
 ---
 
@@ -535,6 +535,15 @@ model_check_feedback → calibration_report 全部通过。
 - **P1 shutdown 不清理自动生成目录**：`shutdown()` 原为空操作，`/tmp/sandbox-bwrap-<uuid>` 残留。改为 `owned=true` 时 `shutdown()` 获取锁并 `remove_dir_all`；`owned=false` 时不删除调用方目录。
 - **reset 与执行操作无互斥**：运行中 Agent 可在清理期间重新创建内容，reset 空目录后置条件无保证。新增 `reset_lock: tokio::sync::Mutex<()>` 字段，`reset()`、`shutdown()`、`execute_shell()` 和全部文件 API 方法（read/write/list/remove/exists/create_dir/create_temp_dir/file_info/append）均获取锁，确保互斥。
 - **验证**：bwrap 34 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18）；新增 8 项测试覆盖所有权（reset 清空 owned 目录、拒绝 caller-provided 目录、拒绝 /var/lib、0700 权限、Agent 无法破坏 reset、shutdown 删除 owned 目录、shutdown 保留 caller 目录、reset 保留文件 API）；workspace 全量测试 0 失败；`cargo fmt --check` 通过；`cargo clippy --workspace --all-targets --all-features -- -D warnings` 零警告；`cargo build --workspace --all-targets` 通过。
+
+### 2026-07-30 runtime issue #97 round-6：生命周期状态机 + 有界 shutdown + 排队取消感知
+
+- **背景**：round-5（904c9b4）后第五轮审查发现两个生产阻断生命周期缺陷：(P0) 无 timeout 的 shell 命令持有 `reset_lock`，`shutdown()`/`reset()` 等待同一锁可被无限阻塞；(P1) 排队中的操作在被取消后仍会执行（取消仅在获取锁前检查，排队等待期间不感知取消）。
+- **P0 无界命令阻塞 shutdown**：新增生命周期状态机 `LifecycleState`（Running/ShuttingDown/Stopped），存储为 `AtomicU8`。`shutdown()` 先 `begin_shutdown()` 原子转换到 ShuttingDown（拒绝新操作），再 `shutdown_token.cancel()` 取消活跃命令，再 `kill_active_children()` 在 `SHUTDOWN_KILL_GRACE`（5s）内有界杀死所有 bwrap 子进程，最后用 `tokio::time::timeout` 有界获取锁并删除 owned 目录。`execute_shell` 通过 `tokio::select!` 将命令与 `shutdown_token` 竞争，shutdown 触发时立即返回。
+- **P1 排队取消不感知**：新增 `acquire_op_lock()` 方法，用 `tokio::select!` 将锁获取与调用方 `abort` token 和 `shutdown_token` 竞争。排队中的操作被取消时立即返回 `EnvError::Aborted`，不等待锁释放。获取锁后再次检查取消/生命周期状态（post-acquisition recheck），关闭 TOCTOU 窗口。
+- **活跃子进程注册表**：`active_children: Mutex<Vec<u32>>` 存储 bwrap 子进程 PID。`register_child()` 在 `execute_shell` 中注册 PID，`ChildGuard` 在 drop 时移除。`kill_active_children()` 通过 `kill(2)` FFI 发送 SIGKILL，bwrap `--new-session` 使内核回收整个进程树。
+- **契约缺口**：`reset()` 现在对所有 caller-provided `work_dir` fail-closed（仅 `work_dir=None` 的 owned 目录可 reset）。所有权/capability 由 `owned: bool` 内存字段显式标记，不再从 `Option<PathBuf>` 推断。
+- **验证**：bwrap 36 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18）；新增 2 项回归测试（无 timeout 命令的 有界 shutdown、排队中取消感知）；workspace 全量测试 0 失败；`cargo fmt --check` 通过；`cargo clippy --workspace --all-targets --all-features -- -D warnings` 零警告；`cargo build --workspace --all-targets` 通过。
 
 ### 2026-07-29 llm-harness-multi-agent 调查：测试状态与触发条件
 
