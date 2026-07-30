@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-30（runtime issue #97 round-10 审查修复（925dfa7）：OwnedMutexGuard + Tainted lifecycle 防止 reset 取消并发破坏工作区；bounded multi-worker ChildReaper 防止 child ownership 丢失。48 bwrap + 24 sandbox-os 测试全过。multi-agent pin bump 到 925dfa7。）
+> 最后更新：2026-07-31（runtime issue #97 round-11 审查修复（943e4aa）：bounded admission bound 防止 reaper 无界资源增长；classify_wait 区分 Interrupted/ECHILD/unknown；is_running/start 统一 Tainted 公开状态。49 bwrap + 27 sandbox-os 测试全过。multi-agent pin 回退 1be6859 fail-closed。）
 
 ---
 
@@ -581,6 +581,15 @@ model_check_feedback → calibration_report 全部通过。
 - **测试清理修复**：`reset_closes_admission_atomically` 现在从 spawn task 返回 sandbox 并调用 `shutdown()` 清理自动生成的目录。
 - **验证**：bwrap 45 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18，并行执行，含新增 RAII 回滚测试）；sandbox-os 19 测试全过（process_is_gone 修复后 4 个 ReapGuard 测试仍通过）；workspace 全量测试 0 失败；`cargo fmt --all -- --check` 通过；`cargo clippy --workspace --all-targets -- -D warnings` 零警告。
 
+### 2026-07-31 runtime issue #97 round-11 审查修复（commit 943e4aa）
+
+- **背景**：round-11 审查未通过生产门禁——四个问题：(P0) reaper 总资源无界（queue 满时每个 child 创建 fallback OS 线程，fallback 线程创建失败后 Drop 内同步无限等待，stuck Vec 无界）；(P1/P0) 任意 try_wait() 错误被当成回收成功（worker、stuck-loop、fallback 三条路径 Err(_) 后丢弃 handle）；(P1) 公开生命周期错误（内部 Tainted 但 is_running() 返回 true，start() 也能在 Tainted 状态成功）；测试缺陷（new_no_workers 丢弃 receiver 误测 Disconnected，stuck child 被 SIGKILL 未进 stuck-list，fallback 未注入线程失败，cleanup failure 在删除前发生）。
+- **P0 bounded admission**：新增 `ChildReaper::try_admit()`——`AtomicUsize` in_flight 计数器（capacity 256），在 spawn 前获取 permit。BwrapEnv 在 `try_admit()` 失败时拒绝 spawn（fail-closed）。permit 在 child exit 确认后释放。删除 `reap_with_fallback`（queue 满时不再 spawn 线程），Full/Disconnected 时 push 到 bounded stuck list。stuck Vec 由 in_flight admission 自然 bound。
+- **P1/P0 try_wait 分类**：新增 `WaitOutcome` enum + `classify_wait()` 函数，区分 `Interrupted`（retry）、`AlreadyReaped`/ECHILD errno 10（可丢弃 handle）、`Unknown`（保留 handle 在 stuck list）。worker、stuck-loop、Drop 全部使用。任何路径都不在未知错误时丢弃 handle。
+- **P1 公开生命周期统一**：`is_running()` 现在同时检查 `running` flag 和 `lifecycle == Running`。Tainted sandbox 报告 `is_running() == false`。`start()` 拒绝 Tainted/ShuttingDown/Stopped 状态。
+- **测试修复**：`new_no_workers()` 保留 receiver 使 full-queue 测试命中 `Full` 而非 `Disconnected`；queue-overflow 测试验证 stuck-list 保留（handle 未丢弃）；新增 `classify_wait` 5 项单元测试（Exited/Pending/Interrupted/AlreadyReaped/Unknown）；新增 `FailPartial` cleanup 模式 + 部分清理 Tainted 测试；Tainted 测试增加 `is_running()`/`start()` 断言；删除 `reap_to_completion`/`reap_with_fallback` 测试（函数已移除）。
+- **验证**：bwrap 49 测试全过（`--include-ignored`）；sandbox-os 27 测试全过；workspace clippy 零警告；`cargo fmt --all -- --check` 通过。multi-agent pin 回退 `1be6859` fail-closed（#97 仍 open）。
+
 ### 2026-07-30 runtime issue #97 round-10 审查修复（commit 925dfa7）
 
 - **背景**：round-10 审查未通过生产门禁——两个确定性故障探针失败：(P0) reset 清理期间取消会并发破坏工作区（spawn_blocking 不随调用 future 取消，RAII guard 和 reset_lock 先释放恢复 Running，后台清理继续删除新写入文件）；(P1/P0) ChildReaper 丢失唯一 child ownership（sender.send(child) 失败时 SendError<Child> 被忽略，child handle 未经 wait() 即被丢弃）。
@@ -590,7 +599,7 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-07-29 llm-harness-multi-agent 调查：测试状态与触发条件
 
-- **仓库**：`oh-my-harness/llm-harness-multi-agent`，固定 runtime rev `925dfa7`。P0–P3 已完成，P4（生产资格验证）进行中。
+- **仓库**：`oh-my-harness/llm-harness-multi-agent`，固定 runtime rev `1be6859`（fail-closed，#97 仍 open）。P0–P3 已完成，P4（生产资格验证）进行中。
 - **是否测过**：是，但仅用 mock。14 单元测试 + 22 workflow 测试全过（`MockLlmClient` + `ScriptedCriticRunner`）。唯一的真实 LLM 端到端测试 `codex_login_produces_audited_runtime_workflow_review` 带 `#[ignore]`（需本地 Codex login + live 请求），默认不跑。即：确定性逻辑有 mock 覆盖，真实模型 E2E 未跑。
 - **何时触发多 Agent**：不自动触发。它是一个 workflow review checkpoint——在 runtime `WorkflowEngine` 里把某个 step 的 executor 注册为 `MultiAgentReviewExecutor`，workflow 走到该 step 时才调用。Critic 以独立 LLM session（隔离上下文，只看产物快照 + rubric）审查 Doer 的产物，路由到 `pass` / `revise` / `escalate` / `abort`。需显式在 workflow 配置中接入，背后由 `runtime` feature 开关。
 - **结论**：多 Agent 目前是"可接线、有 mock 验证"的 checkpoint 机制，尚未在真实 LLM 下端到端验证过，也未接入任何生产 workflow。
