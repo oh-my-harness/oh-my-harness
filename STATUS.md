@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-31（runtime issue #97 round-11 审查修复（943e4aa）：bounded admission bound 防止 reaper 无界资源增长；classify_wait 区分 Interrupted/ECHILD/unknown；is_running/start 统一 Tainted 公开状态。49 bwrap + 27 sandbox-os 测试全过。multi-agent pin 回退 1be6859 fail-closed。）
+> 最后更新：2026-07-31（runtime issue #97 round-12 审查修复（221e8df）：线性 ReapPermit token 替代 bool（不可伪造/重复释放）；worker health flag + fail-closed admission；poison recovery + orphaned list（handle 永不在未确认 exit 时丢弃）；ECHILD 平台 cfg + EINTR 退避。49 bwrap + 27 sandbox-os 测试全过。multi-agent pin 保持 1be6859 fail-closed。）
 
 ---
 
@@ -580,6 +580,15 @@ model_check_feedback → calibration_report 全部通过。
 - **process_is_gone() 修复**：简化为 `std::fs::read_to_string(&status_path).is_err()`——/proc 条目存在（含 zombie）返回 false，仅当进程完全消失返回 true。
 - **测试清理修复**：`reset_closes_admission_atomically` 现在从 spawn task 返回 sandbox 并调用 `shutdown()` 清理自动生成的目录。
 - **验证**：bwrap 45 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18，并行执行，含新增 RAII 回滚测试）；sandbox-os 19 测试全过（process_is_gone 修复后 4 个 ReapGuard 测试仍通过）；workspace 全量测试 0 失败；`cargo fmt --all -- --check` 通过；`cargo clippy --workspace --all-targets -- -D warnings` 零警告。
+
+### 2026-07-31 runtime issue #97 round-12 审查修复（commit 221e8df）
+
+- **背景**：round-12 审查确认 is_running/start/部分清理 Tainted 修复正确，但发现四个问题：(P0) poisoned mutex、reaper 不可用及 fallback 超时路径仍丢弃未确认回收的 child handle 并泄漏 permit（确定性探针复现 in_flight 从 1 无法恢复）；(P0) holds_permit: bool 可伪造、重复释放或泄漏容量；(P0) OnceLock<Some(ChildReaper)> 不代表 worker 仍健康，缺少失活检测和 fail-closed admission；(P1) ECHILD=10 不可移植，连续 EINTR 无退避自旋。
+- **P0 线性 ReapPermit token**：用 `Option<ReapPermit>` 替代 `holds_permit: bool`——`ReapPermit` 不实现 `Clone`/`Copy`，只能通过 `try_admit()` 获取、通过 `Drop` 释放。不可伪造、不可重复释放。`ReapRequest` 持有 `Option<ReapPermit>`，在确认 exit 后 drop 时自动释放 in_flight slot。`ReapGuard` 持有 `Option<ReapPermit>`，`kill_and_wait`/`wait` 成功后 `take()` 释放。
+- **P0 worker health + fail-closed admission**：新增 `alive: Arc<AtomicBool>` 健康标志。`WorkerGuard`（RAII）在任何 worker 退出时（panic、poison、disconnect）设为 `false`。`is_healthy()` 返回标志值。`try_admit()` 在不健康时返回 `None`（fail-closed——worker 死亡后拒绝新 spawn）。
+- **P0 handle 保留 + poison recovery**：所有 mutex lock 站点使用 `unwrap_or_else(|e| e.into_inner())` 从 poison 恢复，不再丢弃 handle。`ReapGuard::drop` 在 reaper 不可用/不健康时 push 到静态 `ORPHANED` list（永不丢弃 handle），专用 `orphan_reaper_loop` 线程定期 reap。任何路径都不在未确认 exit 时丢弃 child handle。
+- **P1 ECHILD 可移植性 + EINTR 退避**：`ECHILD` 使用平台 cfg（linux/macos/freebsd/openbsd/netbsd/android/ios = 10；不支持平台 = -1，永不匹配，安全默认）。`EINTR` 现在在 retry 前睡眠 `EINTR_BACKOFF`（100µs），防止连续中断的紧密自旋。
+- **验证**：bwrap 49 测试全过（`--include-ignored`）；sandbox-os 27 测试全过；workspace clippy 零警告；`cargo fmt --all -- --check` 通过。multi-agent pin 保持 `1be6859` fail-closed（#97 仍 open）。
 
 ### 2026-07-31 runtime issue #97 round-11 审查修复（commit 943e4aa）
 
