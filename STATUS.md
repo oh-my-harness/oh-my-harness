@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-30（runtime issue #97 round-10：RAII ResetLifecycleGuard 保证 reset future 被取消时回滚 lifecycle；集中式 ChildReaper 替代 per-child 线程；修复 process_is_gone zombie 误判。45 bwrap + 19 sandbox-os 测试全过。）
+> 最后更新：2026-07-30（runtime issue #97 round-10 审查修复（925dfa7）：OwnedMutexGuard + Tainted lifecycle 防止 reset 取消并发破坏工作区；bounded multi-worker ChildReaper 防止 child ownership 丢失。48 bwrap + 24 sandbox-os 测试全过。multi-agent pin bump 到 925dfa7。）
 
 ---
 
@@ -581,9 +581,16 @@ model_check_feedback → calibration_report 全部通过。
 - **测试清理修复**：`reset_closes_admission_atomically` 现在从 spawn task 返回 sandbox 并调用 `shutdown()` 清理自动生成的目录。
 - **验证**：bwrap 45 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18，并行执行，含新增 RAII 回滚测试）；sandbox-os 19 测试全过（process_is_gone 修复后 4 个 ReapGuard 测试仍通过）；workspace 全量测试 0 失败；`cargo fmt --all -- --check` 通过；`cargo clippy --workspace --all-targets -- -D warnings` 零警告。
 
+### 2026-07-30 runtime issue #97 round-10 审查修复（commit 925dfa7）
+
+- **背景**：round-10 审查未通过生产门禁——两个确定性故障探针失败：(P0) reset 清理期间取消会并发破坏工作区（spawn_blocking 不随调用 future 取消，RAII guard 和 reset_lock 先释放恢复 Running，后台清理继续删除新写入文件）；(P1/P0) ChildReaper 丢失唯一 child ownership（sender.send(child) 失败时 SendError<Child> 被忽略，child handle 未经 wait() 即被丢弃）。
+- **P0 reset 取消安全**：`reset_lock` 改为 `Arc<tokio::sync::Mutex<()>>` 以支持 `lock_owned()`；`ResetLifecycleGuard::handoff()` 将 lifecycle 所有权转移给 blocking task（caller future drop 不再回滚到 Running）；新增 `Tainted` lifecycle 状态——部分清理错误/panic 时转 Resetting→Tainted（永久不可用），绝不回滚到 Running；`TaintOnDrop` guard 确保 panic 时也转入 Tainted。3 项阶段控制测试：清理中取消、I/O 错误、panic。
+- **P1/P0 ChildReaper ownership**：bounded `sync_channel(256)` + 4 worker 线程（一个 stuck child 不阻塞其他）；专用 `stuck_loop` 线程定期重检超时 child，handle 在 exit 确认前绝不丢弃；`reap()` 从 `TrySendError` 恢复 child 并委托 `reap_with_fallback`；`reap_with_fallback` 用 `Arc<Mutex<Option>>` 条件性 move handle 到 fallback 线程，spawn 失败则 inline reap。5 项测试：receiver 断开、队列满、stuck 隔离、reap_to_completion、fallback reap。
+- **验证**：bwrap 48 测试全过（`--include-ignored`）；sandbox-os 24 测试全过；workspace clippy 零警告；`cargo fmt --all -- --check` 通过。multi-agent pin bump 到 `925dfa7`，`cargo test --all-features` 52 通过 + clippy clean。
+
 ### 2026-07-29 llm-harness-multi-agent 调查：测试状态与触发条件
 
-- **仓库**：`oh-my-harness/llm-harness-multi-agent`，固定 runtime rev `1be6859`。P0–P3 已完成，P4（生产资格验证）进行中。
+- **仓库**：`oh-my-harness/llm-harness-multi-agent`，固定 runtime rev `925dfa7`。P0–P3 已完成，P4（生产资格验证）进行中。
 - **是否测过**：是，但仅用 mock。14 单元测试 + 22 workflow 测试全过（`MockLlmClient` + `ScriptedCriticRunner`）。唯一的真实 LLM 端到端测试 `codex_login_produces_audited_runtime_workflow_review` 带 `#[ignore]`（需本地 Codex login + live 请求），默认不跑。即：确定性逻辑有 mock 覆盖，真实模型 E2E 未跑。
 - **何时触发多 Agent**：不自动触发。它是一个 workflow review checkpoint——在 runtime `WorkflowEngine` 里把某个 step 的 executor 注册为 `MultiAgentReviewExecutor`，workflow 走到该 step 时才调用。Critic 以独立 LLM session（隔离上下文，只看产物快照 + rubric）审查 Doer 的产物，路由到 `pass` / `revise` / `escalate` / `abort`。需显式在 workflow 配置中接入，背后由 `runtime` feature 开关。
 - **结论**：多 Agent 目前是"可接线、有 mock 验证"的 checkpoint 机制，尚未在真实 LLM 下端到端验证过，也未接入任何生产 workflow。
