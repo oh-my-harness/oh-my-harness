@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-30（runtime issue #97 round-9：ReapGuard 改用 std::thread::spawn + try_wait() 轮询实现 runtime-independent reap；新增 Resetting lifecycle state 原子关闭 reset 期间 admission。44 bwrap + 19 sandbox-os 测试全过。）
+> 最后更新：2026-07-30（runtime issue #97 round-10：RAII ResetLifecycleGuard 保证 reset future 被取消时回滚 lifecycle；集中式 ChildReaper 替代 per-child 线程；修复 process_is_gone zombie 误判。45 bwrap + 19 sandbox-os 测试全过。）
 
 ---
 
@@ -571,6 +571,15 @@ model_check_feedback → calibration_report 全部通过。
 - **P1 Resetting lifecycle 关闭 admission**：新增 `Resetting` 生命周期状态（Running→Resetting→Running）。`begin_reset()` 在 token swap 前原子转 Running→Resetting，`acquire_op_lock()` 在 pre-lock 和 post-lock 两处检查 `lifecycle != Running` 即拒绝，使 reset 期间新操作被立即拒绝而非排队等待。`finish_reset()` 重开 admission；超时时回滚到 Running。`begin_shutdown()` 同时接受 Running 和 Resetting 作为合法起始状态。
 - **新增测试**：`reset_closes_admission_atomically`（手动持锁使 reset 阻塞在 lock 获取阶段，验证 Resetting 状态下新命令被拒绝，释放锁后 reset 快速完成并恢复可用）；sandbox-os 新增 4 项 ReapGuard 单元测试（无 runtime、runtime 关闭中、runtime 存活、kill_and_wait reaped 标记）。
 - **验证**：bwrap 44 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18，并行执行）；sandbox-os 19 测试全过（15 原有 + 4 ReapGuard）；workspace 全量测试 0 失败；`cargo fmt --all -- --check` 通过；`cargo clippy --workspace --all-targets -- -D warnings` 零警告。
+
+### 2026-07-30 runtime issue #97 round-10：RAII lifecycle guard + 集中式 child reaper
+
+- **背景**：round-9（6cb0a69）后第九轮审查发现四个问题：(P0) reset() future 被取消或丢弃后 lifecycle 永久停在 Resetting，后续操作全部失败；清理 I/O 或 spawn_blocking 错误也有同样问题。(P1/P0) ReapGuard::drop() 每个子进程创建一个无界 OS 线程，`std::thread::spawn` 在线程创建失败时 panic（Drop 中 panic 导致 abort）；`try_wait()` 错误被错误地视为已回收。测试中 `process_is_gone()` 把 zombie 误判为已消失。`reset_closes_admission_atomically` 未调用 `shutdown()`，泄漏 `/tmp/sandbox-bwrap-*`。
+- **P0 RAII ResetLifecycleGuard**：新增 `ResetLifecycleGuard` 结构体——`begin()` 原子转 Running→Resetting，`complete()` 转回 Running，`Drop` 在未 complete 时自动调用 `finish_reset()` 回滚。`reset()` 重写为使用 guard——所有错误路径（lock 超时、spawn_blocking 错误、I/O 错误）和 future 取消均通过 `?` + `Drop` 自动回滚，不再需要手动 `finish_reset()` 调用。新增测试 `reset_future_drop_rolls_back_to_running`：持锁使 reset 阻塞，短暂 poll 后 drop future，验证 lifecycle 回滚到 Running 且 sandbox 仍可用。
+- **集中式 ChildReaper**：新增 `ChildReaper` 结构体——单个专用 reaper 线程（`OnceLock` 懒初始化），mpsc channel 接收子进程，`Drop` 中不创建新线程、不 panic。线程创建用 `std::thread::Builder::spawn`（返回 `Result`），失败时返回 `None`，调用方退化为 SIGKILL-only（init 在父进程退出时回收）。reaper 循环对 `try_wait()` 错误重试 10 次后再放弃（不再立即 break），10 秒超时处理 D-state 进程。
+- **process_is_gone() 修复**：简化为 `std::fs::read_to_string(&status_path).is_err()`——/proc 条目存在（含 zombie）返回 false，仅当进程完全消失返回 true。
+- **测试清理修复**：`reset_closes_admission_atomically` 现在从 spawn task 返回 sandbox 并调用 `shutdown()` 清理自动生成的目录。
+- **验证**：bwrap 45 测试全过（`--include-ignored`，真实 bwrap 0.4.0，kernel 4.18，并行执行，含新增 RAII 回滚测试）；sandbox-os 19 测试全过（process_is_gone 修复后 4 个 ReapGuard 测试仍通过）；workspace 全量测试 0 失败；`cargo fmt --all -- --check` 通过；`cargo clippy --workspace --all-targets -- -D warnings` 零警告。
 
 ### 2026-07-29 llm-harness-multi-agent 调查：测试状态与触发条件
 
