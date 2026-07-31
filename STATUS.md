@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-31（runtime issue #97 round-14 审查修复：ChildLease 改为不透明类型（confirm_exit/child_mut/new 全部私有，禁止伪造 confirmed exit）；ReapRequest::Drop 仅在 confirmed=true 时释放容量（panic 时不提前释放）；per-component 存活位掩码 + 路由到存活组件（禁止向死亡 orphan 转移）；事务化初始化（stop token + 线程 handle + 失败时 join）；worker/stuck/orphan 使用 catch_unwind + RefCell 恢复 request ownership。44 sandbox-os + 49 bwrap + 1 API boundary 测试全过，clippy 零警告。multi-agent pin 保持 1be6859 fail-closed（#97/#98 仍 open）。）
+> 最后更新：2026-07-31（runtime issue #97 round-15 审查修复：用权威 ChildRegistry 替换 ReapRequest——registry 持有唯一 Child handle 直到 try_wait 确认终态，worker/stuck/orphan 队列仅携带 ChildId；组件退出时 LivenessGuard 重扫 registry 并重新入队到存活组件，所有组件死亡时 fatal_cleanup 同步 kill+wait（替代 mem::forget）；api_boundary 改为 trybuild compile-fail 门禁。40 sandbox-os lib + 1 trybuild + 49 bwrap 测试全过，clippy 零警告。事务化初始化的线程启动失败注入和 worker 持有 ChildId 时真实线程 panic 的端到端迁移尚未直接注入（#97 保持 open）。multi-agent pin 保持 1be6859 fail-closed（#97/#98 仍 open）。）
 
 ---
 
@@ -603,13 +603,24 @@ model_check_feedback → calibration_report 全部通过。
 ### 2026-07-31 runtime issue #97 round-14 审查修复
 
 - **背景**：round-14 审查发现五个问题：(P0) `ChildLease::confirm_exit()`、`child_mut()` 和 `new()` 是公开 API，外部代码可在 child 仍运行时伪造 confirmed exit 提前释放容量；(P0) `ReapRequest::Drop` 无条件减少 in_flight，worker panic 时栈展开会提前释放容量；(P0) `is_healthy()` 是聚合状态，orphan 线程死亡后仍向 ORPHANED 列表转移 child；(P1) 初始化非真正事务化，orphan 线程启动失败时已启动的 stuck loop 无停止信号永久运行；(测试缺陷) `supervisor_failure` 只构造 Failed 对象、`liveness_guard` 未在线程持有 request 时注入 panic、`mutex_poison` 未断言 PID 消失和容量恢复、`lease_reaps_during_runtime_shutdown` 额外启动了未管理 child。
-- **P0 不透明 ChildLease**：`confirm_exit()`、`child_mut()` 改为私有，`new()` 改为 `#[cfg(test)]`。生产 child 必须来自 `SpawnAdmission::into_lease()`。bwrap 只取得 opaque lease 传给 `drain_child_output_guarded`。新增 `tests/api_boundary.rs` 集成测试验证外部 crate 无法访问私有方法。
-- **P0 ReapRequest::Drop 条件释放**：`ReapRequest` 新增 `confirmed: bool` 字段。`Drop` 仅在 `confirmed=true` 时减 in_flight。worker/stuck/orphan 仅在 `classify_wait` 返回 `Exited`/`AlreadyReaped` 后调用 `confirm()`。未确认 request 被 drop 时容量泄漏（fail-closed）。
-- **P0 per-component 存活路由**：`state: AtomicU8` 替换为 `components: AtomicU8` 位掩码（COMP_WORKERS|COMP_STUCK|COMP_ORPHAN）。`is_healthy()` = 所有位设置。`route_child()` 分离 admission 接受与 child 路由：先尝试 worker 队列，失败则路由到仍存活的组件（stuck → orphan）。所有组件死亡时 `mem::forget(req)` 终态（handle + 容量泄漏）。
+- **P0 不透明 ChildLease**：`confirm_exit()`、`child_mut()` 改为私有，`new()` 改为 `#[cfg(test)]`。生产 child 必须来自 `SpawnAdmission::into_lease()`。bwrap 只取得 opaque lease 传给 `drain_child_output_guarded`。~~新增 `tests/api_boundary.rs` 集成测试验证外部 crate 无法访问私有方法。~~（round-15 审查指出当时只是注释非法代码，非真正编译门禁。round-15 已改为 trybuild compile-fail——见下方。）
+- **P0 ReapRequest::Drop 条件释放**：`ReapRequest` 新增 `confirmed: bool` 字段。`Drop` 仅在 `confirmed=true` 时减 in_flight。worker/stuck/orphan 仅在 `classify_wait` 返回 `Exited`/`AlreadyReaped` 后调用 `confirm()`。~~未确认 request 被 drop 时容量泄漏（fail-closed）。~~（round-15 审查推翻：confirmed=false 时 Drop 仍自动 drop Child 字段，只泄漏计数不能保留 wait 能力——探针先 start_kill 再 drop request，PID 两秒后未回收。round-15 已用 ChildRegistry 替换 ReapRequest——见下方。）
+- **P0 per-component 存活路由**：`state: AtomicU8` 替换为 `components: AtomicU8` 位掩码（COMP_WORKERS|COMP_STUCK|COMP_ORPHAN）。`is_healthy()` = 所有位设置。`route_child()` 分离 admission 接受与 child 路由：先尝试 worker 队列，失败则路由到仍存活的组件（stuck → orphan）。~~所有组件死亡时 `mem::forget(req)` 终态（handle + 容量泄漏）。~~（round-15 审查推翻：mem::forget 永久泄漏句柄/zombie/admission，不属于 guaranteed reap。round-15 改为 fatal_cleanup 同步 kill+wait——见下方。）
 - **P1 事务化初始化**：所有线程持有 `stop: Arc<AtomicBool>` + `JoinHandle`。worker 使用 `recv_timeout(50ms)` 检查 stop。任一阶段失败：设 stop + drop sender + bounded join 所有已启动线程，返回 None。状态转换单调（`fetch_and` 只清位不设位）。
-- **catch_unwind + RefCell 恢复**：worker/stuck/orphan 处理 request 时使用 `catch_unwind(AssertUnwindSafe(|| { let r = req_cell.borrow_mut(); ... }))`。panic 后 `req_cell.into_inner()` 恢复 request ownership，路由到 stuck list。临时 `Vec<ReapRequest>` unwind 时 `confirmed=false` 的 request 不释放容量。
+- ~~**catch_unwind + RefCell 恢复**：worker/stuck/orphan 处理 request 时使用 `catch_unwind(AssertUnwindSafe(|| { let r = req_cell.borrow_mut(); ... }))`。panic 后 `req_cell.into_inner()` 恢复 request ownership，路由到 stuck list。临时 `Vec<ReapRequest>` unwind 时 `confirmed=false` 的 request 不释放容量。~~（round-15 审查推翻：组件存活位只影响新请求，stuck/worker/orphan 已持有的请求不会在组件退出后迁移——真实 stuck/orphan 线程探针中 stuck 退出后 PID 未被 orphan 回收。round-15 用 ChildRegistry 替换 ReapRequest，队列仅携带 ChildId，registry 持有唯一 handle——见下方。）
 - **测试修复**：`lease_reaps_during_runtime_shutdown` 重写为同一 child/lease/runtime；`mutex_poison_still_reaps` 断言 PID 消失 + in_flight 恢复 0；`liveness_guard_closes_admission` 验证位掩码单调性；新增 `orphan_dead_routes_to_stuck_not_orphan`、`workers_dead_routes_to_stuck`、`all_dead_leaks_handle_and_admission`、`unconfirmed_reap_request_does_not_release_admission`、`confirmed_reap_request_releases_admission`、`liveness_guard_is_monotonic`、`confirm_exit_is_private_cannot_forge`。
 - **验证**：sandbox-os 44 测试全过（lib）+ 1 API boundary 测试；bwrap 49 测试全过；workspace `cargo test --all-features` 0 失败；clippy 零警告；`cargo fmt --all -- --check` 通过。multi-agent pin 保持 `1be6859` fail-closed（#97/#98 仍 open）。
+
+### 2026-07-31 runtime issue #97 round-15 审查修复
+
+- **背景**：round-15 审查发现三个 P0：(1) `ReapRequest::Drop` 在 `confirmed=false` 时仍自动 drop `Child` 字段，只泄漏计数不能保留 wait 能力（探针先 `start_kill()` 再 drop request，PID 两秒后未回收）；(2) 所有组件死亡时 `mem::forget(req)` 永久泄漏句柄/zombie/admission；(3) 组件存活位只影响新请求，stuck/worker/orphan 已持有的请求不会在组件退出后迁移（真实 stuck/orphan 线程探针中 stuck 退出后 PID 未被 orphan 回收）。
+- **P0 权威 ChildRegistry**：删除 `ReapRequest`，新建 `ChildRegistry`（`HashMap<ChildId, RegistryEntry>`）——registry 持有唯一 `Child` handle 直到 `try_wait` 确认终态。worker/stuck/orphan 队列仅携带 `ChildId`（u64），不持有最后一个 handle。`register()` 立即 `start_kill()`。`try_reap_once`/`try_reap_with_deadline` 在确认 `Exited`/`AlreadyReaped` 后移除 entry 并释放 in_flight。`fatal_cleanup()` 同步 kill+wait 全部剩余 child（替代 `mem::forget`）。
+- **P0 组件死亡迁移**：`LivenessGuard` 新增 `registry` + `sender` 字段。drop 时：若所有组件死亡→`fatal_cleanup`（同步 kill+wait）；若有存活组件→`all_ids()` 重扫 registry 并 `try_send` 到存活 worker 队列。orphan reaper 的 `LivenessGuard` `sender=None`（靠周期扫描）。
+- **P0 无 reaper 路径**：`ChildLease::drop` 在 `ChildReaper::global()` 返回 `None` 时调用 `blocking_kill_and_reap`（同步 kill+wait+释放 in_flight），不再 `mem::forget`。
+- **trybuild compile-fail 门禁**：`api_boundary.rs` 从注释代码改为 `trybuild::TestCases::compile_fail`，验证外部 crate 无法访问 `confirm_exit`/`child_mut`/`new`（E0624/E0599）。
+- **测试**：所有 reaper 测试断言 PID 消失。新增 `all_dead_reaps_via_fatal_cleanup`（fatal_cleanup 后 PID 消失+registry 空）、`stuck_scheduler_reaps_registry_entries`（全局 reaper reaps registry entry）、`liveness_guard_rescan_reenqueues_pending`（组件 guard drop 后重扫+重新入队，PID 消失）、`no_reaper_synchronous_reap`（`blocking_kill_and_reap` 直接测试）、`mutex_poison_still_reaps`（poison 后 PID 消失+in_flight 恢复 0）、`cancellation_storm_stays_bounded`（32 child 并发 drop，in_flight 有界且最终恢复 0）。`liveness_guard_rescan_reenqueues_pending` 使用独立 components atomic 避免降级全局 reaper。
+- **已知测试覆盖缺口**（诚实记录，#97 保持 open）：事务化初始化的线程启动失败路径尚未注入真实失败（`OnceLock` 无法重入）；worker 持有 `ChildId` 时真实线程 panic 的端到端迁移尚未直接注入（`LivenessGuard::drop` 代码路径已通过手动 guard drop 测试覆盖，但未模拟真实线程 panic 触发）。这些缺口在 #97 关闭前需补充。
+- **验证**：sandbox-os 40 lib 测试 + 1 trybuild compile-fail；bwrap 49 测试（`--include-ignored`）；workspace `cargo test --all-features` 0 失败；clippy 零警告；`cargo fmt --all --check` 通过。multi-agent 100 passed + 2 ignored + clippy clean（pin 保持 `1be6859`）。#97/#98 保持 open。
 
 ### 2026-07-31 runtime issue #97 round-11 审查修复（commit 943e4aa）
 
