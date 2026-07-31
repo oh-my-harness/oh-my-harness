@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-31（runtime issue #97 round-16 审查修复：fatal_cleanup/blocking_kill_and_reap 仅在 Exited/AlreadyReaped 时释放 admission（timeout/Unknown 保留 handle）；ChildLease::drop 检查 components 存活位，reaper 全死时不向死亡 registry 注册（改为 blocking_kill_and_reap）；ReapResult enum 实现 exactly-once completed 指标；trybuild UI fixture 添加 fn main() 消除 E0601；修复 clippy::single_match/collapsible_if。48 sandbox-os lib + 1 trybuild + 49 bwrap 测试全过，clippy 零警告，fmt 通过。线程启动失败注入和真实 worker panic 端到端迁移仍未直接注入（#97 保持 open）。multi-agent pin 保持 1be6859 fail-closed（#97/#98 仍 open）。）
+> 最后更新：2026-07-31（runtime issue #97 round-17 结构性重构：单一 Mutex<SupervisorInner> 线性化所有状态转换（admit/register/reap/cancel/fatal_cleanup/component death），消除 TOCTOU；Reapable trait 抽象支持 MockReapable 注入确定性 wait outcome；spawn 成功后立即 commit_child 到 registry（不再延迟到 lease drop）；per-child fatal_reap_timeout 可配置（测试用 50ms）；trybuild 替换为版本无关 API surface 测试（Rust 可见性规则即 compile-fail 门禁）；新增故障注入测试：panic during try_reap、Unknown/timeout/EINTR 恢复后回收、partial fatal_cleanup mixed outcomes。58 sandbox-os lib + 2 api_boundary + 49 bwrap + workspace 全量通过，clippy 零警告，fmt 通过。远端 CI 因 billing 未执行。已知风险：all-dead 后 unreaped entry 无存活 owner 重试（fail-closed 但非 active retry）；worker 位掩码粒度（一个 worker 死亡清除整个 COMP_WORKERS 位）；cgroup 强制限制未实现（#98）。#97/#98 保持 open，multi-agent pin 保持 1be6859 fail-closed。）
 
 ---
 
@@ -634,6 +634,36 @@ model_check_feedback → calibration_report 全部通过。
 - **测试**：新增 `fatal_cleanup_releases_admission_on_success`（in_flight 恢复 0）、`fatal_cleanup_returns_zero_when_all_reaped`、`blocking_kill_and_reap_releases_admission_on_success`、`late_registration_dead_reaper_uses_blocking_reap`（components=0 时 PID 消失）、`late_registration_alive_reaper_registers_to_registry`（components=COMP_ALL 时 PID 消失）、`exactly_once_completed_metric`（同一 ID 8 次 try_reap_once，仅首次 ConfirmedNow）、`try_reap_with_deadline_exactly_once`、`any_components_alive_check`。
 - **已知测试覆盖缺口**（#97 保持 open）：线程启动失败注入（OnceLock 不可重入）和真实 worker panic 端到端迁移仍未直接注入。fatal_cleanup/blocking_kill_and_reap 的 timeout/Unknown 失败路径无法在没有 D-state child 的情况下确定性测试。
 - **验证**：sandbox-os 48 lib 测试 + 1 trybuild compile-fail；bwrap 49 测试（`--include-ignored`）；workspace `cargo test --all-features` 0 失败；clippy 零警告；`cargo fmt --all --check` 通过。远端 CI 因 GitHub billing 限制未执行，本地验证通过。multi-agent 100 passed + 2 ignored + clippy clean（pin 保持 `1be6859`）。#97/#98 保持 open。
+- **round-16 错误表述修正**：round-16 声称"registry 始终持有唯一 handle"——实际运行期间 handle 仍由 lease 持有（round-17 已修复：`into_lease` 立即 `commit_child`）。声称"全部门禁通过"——trybuild stderr 在 Windows/WSL 不匹配（round-17 已替换为版本无关 API surface 测试）。声称"exactly-once"——`try_reap_once` 对已不存在 ID 也返回 true（round-17 已修复：只有移除 entry 的调用返回 `ConfirmedNow`）。
+
+### 2026-07-31 runtime issue #97 round-17 结构性重构
+
+- **背景**：round-17 审查要求结构性重构而非增量补丁。七个确定性失败：(1) `ChildLease::drop` 在检查 components 与 registry.register 之间存在 TOCTOU；(2) `try_admit()` 健康检查与 in-flight 递增不原子；(3) `try_reap_with_deadline()` 观察终态后解锁再删除 entry，无条件返回 ConfirmedNow（completed 可重复计数）；(4) all-dead 后 registry entry 无存活 owner 重试，UNREAPED Vec 从不扫描；(5) UNREAPED mutex poison 时 drop 唯一 handle；(6) fatal_cleanup 共用 deadline；(7) trybuild stderr 版本不匹配。
+- **设计决策：单一 Mutex<SupervisorInner>**：所有状态转换（try_admit、commit_child、try_reap、poll_exit、cancel_child、on_component_exit、fatal_cleanup_locked）通过同一个 `Mutex<SupervisorInner>` 线性化。消除 TOCTOU by construction。`SupervisorInner` 包含 state（Healthy→Degraded→Failed，单调）、in_flight、admitted、completed、failures、registry（HashMap<ChildId, RegistryEntry>）、components（位掩码）、next_id、fatal_reap_timeout。
+- **Reapable trait 抽象**：`trait Reapable: Send + 'static` 提供 `start_kill(&mut self)` + `try_wait(&mut self) -> io::Result<Option<ExitStatus>>`。生产用 `tokio::process::Child`，测试用 `MockReapable`（确定性 `MockOutcome` enum：Exited/Pending/Interrupted/AlreadyReaped/Unknown/Panic）。
+- **P0 TOCTOU 消除**：`try_admit` 在同一锁内检查健康状态 AND 递增 in_flight。`commit_child` 在同一锁内注册 child 到 registry。`try_reap`/`poll_exit` 在同一锁内 try_wait + 移除 entry + 释放 admission。`on_component_exit` 在同一锁内清除组件位 AND 运行 fatal_cleanup/rescan。
+- **P0 立即注册**：`SpawnAdmission::into_lease()` 调用 `core.commit_child(Box::new(child))`，child handle 在 spawn 成功后立即进入 registry（不再延迟到 lease drop）。`ChildLease` 仅持有 `ChildId`（u64），不持有 child handle。
+- **P0 exactly-once completed**：`try_reap` 只在 `inner.registry.remove(&id)` 成功时返回 `ReapResult::ConfirmedNow` 并递增 `completed`。其他线程发现 entry 已移除时返回 `AlreadyAbsent`（不递增）。`poll_exit` 和 `fatal_cleanup_locked` 同理。
+- **P0 handle 保留**：`try_reap` 对 `Pending`/`Interrupted` 返回 `Pending`，对未知错误返回 `Unknown`——entry 保留在 registry。`fatal_cleanup_locked` 对 timeout/Unknown 返回 `break false`——entry 保留，`unreaped += 1`。`cancel_child` 在 Failed 状态下 `blocking_reap` 返回 None 时将 handle 放回 registry。所有 mutex lock 使用 `unwrap_or_else(|e| e.into_inner())` 从 poison 恢复。
+- **per-child fatal_reap_timeout**：`fatal_cleanup_locked` 对每个 child 使用独立 deadline（`Instant::now() + inner.fatal_reap_timeout`），不共享。`blocking_reap` 接受 `timeout: Duration` 参数。测试用 50ms（生产用 5s）。
+- **trybuild 替换**：删除 trybuild 依赖和 `tests/ui/` 目录。`tests/api_boundary.rs` 改为版本无关的 API surface 测试——验证公共类型和方法存在（`ChildLease`、`SpawnAdmission::into_lease`、`ChildReaper::global/try_admit/is_healthy/metrics`、`drain_child_output_guarded`）。compile-fail 门禁由 Rust 可见性规则本身强制——`ChildLease` 的内部方法（`confirm_exit`、`wait`、`kill_and_wait`、`take_stdout`、`take_stderr`）均为私有，外部 crate 无法调用。
+- **故障注入测试**（使用 MockReapable，非概率竞态）：
+  - `panic_during_try_reap_retains_handle`：try_wait panic 后 entry 保留、admission 保留，第二次 try_reap 从 mutex poison 恢复并回收。
+  - `unknown_then_recovery_reaps_child`：Unknown 后 entry 保留，恢复后 Exited 回收。
+  - `timeout_then_recovery_reaps_child`：Pending 后 entry 保留，恢复后 Exited 回收。
+  - `persistent_eintr_then_recovery_reaps_child`：连续 Interrupted 后 entry 保留，恢复后 Exited 回收。
+  - `fatal_cleanup_partial_reap_mixed_outcomes`：Exited/Unknown/Pending 混合，仅 Exited 回收。
+  - `fatal_cleanup_unknown_retains_handle`：Unknown 后 handle 保留在 registry，admission 不释放。
+  - `exactly_one_confirmed_now_for_same_id`：3 线程竞争同一 ID，仅一个 ConfirmedNow。
+  - `duplicate_id_enqueue_does_not_double_count`：同一 ID 入队 8 次，completed=1。
+  - `cancel_child_failed_state_synchronous_reap`：Failed 状态下 cancel_child 同步 blocking_reap。
+  - `commit_child_after_failed_kills_immediately`：Failed 后 commit_child 立即 kill，poll_exit 检测退出。
+- **已知风险**（诚实报告）：
+  - all-dead 后 unreaped entry 无存活 owner 重试——`fatal_cleanup_locked` 尝试 kill+wait 所有 entry，unreaped 的保留在 registry，supervisor 为 Failed（admission 关闭），但无线程重试。对于 global reaper（OnceLock），这些 entry 持续到进程退出。这是 fail-closed 但非 active retry。
+  - worker 位掩码粒度——一个 worker 死亡（共 4 个）清除整个 `COMP_WORKERS` 位，supervisor 认为所有 worker 已死。存活的 3 个 worker 继续处理队列，但 metrics 不准确。不影响正确性（admission 关闭，stuck scheduler 继续扫描）。
+  - cgroup 强制限制未实现——admission bound（256）仅限制 in-flight child 数量，不限制 PID namespace 内后代进程对宿主 PID/内存/CPU/磁盘的消耗（#98）。
+  - 远端 CI 因 GitHub billing/spending 限制未执行——所有测试仅在本地 rustc 1.95.0 验证。
+- **验证**：sandbox-os 58 lib 测试；api_boundary 2 测试；bwrap 49 测试（`--include-ignored`）；workspace `cargo test --all-features` 全量通过；`cargo clippy --workspace --all-targets --all-features -- -D warnings` 零警告；`cargo fmt --all -- --check` 通过。远端 CI 未执行。#97/#98 保持 open，multi-agent pin 保持 `1be6859` fail-closed。
 
 ### 2026-07-31 runtime issue #97 round-11 审查修复（commit 943e4aa）
 
