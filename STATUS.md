@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-31（runtime issue #97 round-12 审查修复（221e8df）：线性 ReapPermit token 替代 bool（不可伪造/重复释放）；worker health flag + fail-closed admission；poison recovery + orphaned list（handle 永不在未确认 exit 时丢弃）；ECHILD 平台 cfg + EINTR 退避。49 bwrap + 27 sandbox-os 测试全过。multi-agent pin 保持 1be6859 fail-closed。）
+> 最后更新：2026-07-31（runtime issue #97 round-13 审查修复：SpawnAdmission/ChildLease 两阶段耦合替代 ReapPermit（permit 不可独立释放）；drain_child_output_guarded 改为同步函数返回 Future（修复 unpolled future 丢弃 handle）；SupervisorState 状态机 + 全线程 LivenessGuard（worker/stuck/orphan）；reap_with_deadline 提取（EINTR 检查 deadline）；ReaperMetrics 暴露 admitted/completed/stuck/orphaned/failures；cgroup v2 资源限制拆分为 #98。37 sandbox-os + 49 bwrap 测试全过，clippy 零警告。multi-agent pin 保持 1be6859 fail-closed（#97/#98 仍 open）。）
 
 ---
 
@@ -586,9 +586,19 @@ model_check_feedback → calibration_report 全部通过。
 - **背景**：round-12 审查确认 is_running/start/部分清理 Tainted 修复正确，但发现四个问题：(P0) poisoned mutex、reaper 不可用及 fallback 超时路径仍丢弃未确认回收的 child handle 并泄漏 permit（确定性探针复现 in_flight 从 1 无法恢复）；(P0) holds_permit: bool 可伪造、重复释放或泄漏容量；(P0) OnceLock<Some(ChildReaper)> 不代表 worker 仍健康，缺少失活检测和 fail-closed admission；(P1) ECHILD=10 不可移植，连续 EINTR 无退避自旋。
 - **P0 线性 ReapPermit token**：用 `Option<ReapPermit>` 替代 `holds_permit: bool`——`ReapPermit` 不实现 `Clone`/`Copy`，只能通过 `try_admit()` 获取、通过 `Drop` 释放。不可伪造、不可重复释放。`ReapRequest` 持有 `Option<ReapPermit>`，在确认 exit 后 drop 时自动释放 in_flight slot。`ReapGuard` 持有 `Option<ReapPermit>`，`kill_and_wait`/`wait` 成功后 `take()` 释放。
 - **P0 worker health + fail-closed admission**：新增 `alive: Arc<AtomicBool>` 健康标志。`WorkerGuard`（RAII）在任何 worker 退出时（panic、poison、disconnect）设为 `false`。`is_healthy()` 返回标志值。`try_admit()` 在不健康时返回 `None`（fail-closed——worker 死亡后拒绝新 spawn）。
-- **P0 handle 保留 + poison recovery**：所有 mutex lock 站点使用 `unwrap_or_else(|e| e.into_inner())` 从 poison 恢复，不再丢弃 handle。`ReapGuard::drop` 在 reaper 不可用/不健康时 push 到静态 `ORPHANED` list（永不丢弃 handle），专用 `orphan_reaper_loop` 线程定期 reap。任何路径都不在未确认 exit 时丢弃 child handle。
+- **P0 handle 保留 + poison recovery**：所有 mutex lock 站点使用 `unwrap_or_else(|e| e.into_inner())` 从 poison 恢复。`ReapGuard::drop` 在 reaper 不可用/不健康时 push 到静态 `ORPHANED` list，专用 `orphan_reaper_loop` 线程定期 reap。~~任何路径都不在未确认 exit 时丢弃 child handle。~~（round-13 审查推翻此绝对表述：unpolled future 在首次 poll 前丢弃会直接 drop Child handle，绕过 ReapGuard。round-13 已修复——见下方。）
 - **P1 ECHILD 可移植性 + EINTR 退避**：`ECHILD` 使用平台 cfg（linux/macos/freebsd/openbsd/netbsd/android/ios = 10；不支持平台 = -1，永不匹配，安全默认）。`EINTR` 现在在 retry 前睡眠 `EINTR_BACKOFF`（100µs），防止连续中断的紧密自旋。
 - **验证**：bwrap 49 测试全过（`--include-ignored`）；sandbox-os 27 测试全过；workspace clippy 零警告；`cargo fmt --all -- --check` 通过。multi-agent pin 保持 `1be6859` fail-closed（#97 仍 open）。
+
+### 2026-07-31 runtime issue #97 round-13 审查修复
+
+- **背景**：round-13 审查发现五个问题：(P0) `drain_child_output_guarded` 是 `pub async fn`，`ReapGuard` 仅在首次 poll 时创建——future 未 poll 即丢弃会直接 drop Child handle、提前释放 permit、子进程继续运行；(P0) `WorkerGuard` 只覆盖 worker 线程，stuck/orphan 线程无 liveness guard，`global()` 可部分初始化（worker 已启动但后续线程 spawn 失败返回 None）；(P1) `ReapPermit` 的 Drop 无条件减计数，类型系统不保证仅在 child 确认退出后释放；(P1) 连续 EINTR 在 `Interrupted` 分支不检查 `REAP_WORKER_TIMEOUT`，持续 EINTR 永久占用 worker；(P0) 顶层 admission 不限制 namespace 内后代进程对宿主 PID/内存/CPU/磁盘的消耗。
+- **P0 unpolled future 修复**：`drain_child_output_guarded` 从 `pub async fn` 改为 `pub fn -> impl Future`——`ChildLease` 在返回 future 前同步创建，未 poll 的 future 被 drop 时也触发 `ChildLease::drop`，委托 reaper kill+wait。新增 `unpolled_future_still_reaps_child` 测试（sentinel 不出现 + PID 消失）。
+- **P0 SpawnAdmission/ChildLease 两阶段耦合**：`ReapPermit` 替换为 `SpawnAdmission`（pre-spawn，drop 释放 slot）+ `ChildLease`（post-spawn，拥有 child + in_flight，不可拆分）。`ChildLease::drop` 不直接减计数——委托 reaper，reaper 确认 exit 后 `ReapRequest::drop` 才减。`into_lease(child)` 消费 admission，类型系统阻止独立释放 post-spawn permit。
+- **P0 SupervisorState 状态机 + 全线程 LivenessGuard**：`alive: AtomicBool` 替换为 `state: AtomicU8`（Healthy/Degraded/Failed）。`LivenessGuard` 覆盖所有线程（worker/stuck/orphan），任一退出即 Degraded + 关闭 admission。初始化事务性——任一线程 spawn 失败设 Failed 返回 None。`ReaperMetrics` 暴露 in_flight/admitted/completed/worker_failures/stuck/orphaned/healthy。
+- **P1 EINTR deadline**：提取 `reap_with_deadline(try_wait, deadline)` 函数——`Interrupted` 分支现在检查 deadline，超时后转入 stuck list。可注入 `try_wait` 闭包测试（`persistent_eintr_exceeds_deadline`、`persistent_unknown_error_retains_ownership`）。
+- **P0 资源边界**：cgroup v2 限制拆分为独立 #98（`pids.max`/`memory.max`/`cpu.max`/清理/超时回收）。#97 范围缩小至 child reaper。#98 关闭前 multi-agent 不得采用 bwrap 作为生产边界。
+- **验证**：sandbox-os 37 测试全过（10 项新增：unpolled future、liveness guard、supervisor failure、admission capacity、spawn failure、persistent EINTR、unknown error、mutex poison、cancellation storm、classify_wait）；bwrap 49 测试全过；workspace clippy 零警告；`cargo fmt --all` 通过。multi-agent pin 保持 `1be6859` fail-closed（#97/#98 仍 open）。
 
 ### 2026-07-31 runtime issue #97 round-11 审查修复（commit 943e4aa）
 
