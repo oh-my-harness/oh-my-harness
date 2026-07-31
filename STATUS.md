@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-07-31（runtime issue #97 round-15 审查修复：用权威 ChildRegistry 替换 ReapRequest——registry 持有唯一 Child handle 直到 try_wait 确认终态，worker/stuck/orphan 队列仅携带 ChildId；组件退出时 LivenessGuard 重扫 registry 并重新入队到存活组件，所有组件死亡时 fatal_cleanup 同步 kill+wait（替代 mem::forget）；api_boundary 改为 trybuild compile-fail 门禁。40 sandbox-os lib + 1 trybuild + 49 bwrap 测试全过，clippy 零警告。事务化初始化的线程启动失败注入和 worker 持有 ChildId 时真实线程 panic 的端到端迁移尚未直接注入（#97 保持 open）。multi-agent pin 保持 1be6859 fail-closed（#97/#98 仍 open）。）
+> 最后更新：2026-07-31（runtime issue #97 round-16 审查修复：fatal_cleanup/blocking_kill_and_reap 仅在 Exited/AlreadyReaped 时释放 admission（timeout/Unknown 保留 handle）；ChildLease::drop 检查 components 存活位，reaper 全死时不向死亡 registry 注册（改为 blocking_kill_and_reap）；ReapResult enum 实现 exactly-once completed 指标；trybuild UI fixture 添加 fn main() 消除 E0601；修复 clippy::single_match/collapsible_if。48 sandbox-os lib + 1 trybuild + 49 bwrap 测试全过，clippy 零警告，fmt 通过。线程启动失败注入和真实 worker panic 端到端迁移仍未直接注入（#97 保持 open）。multi-agent pin 保持 1be6859 fail-closed（#97/#98 仍 open）。）
 
 ---
 
@@ -614,13 +614,26 @@ model_check_feedback → calibration_report 全部通过。
 ### 2026-07-31 runtime issue #97 round-15 审查修复
 
 - **背景**：round-15 审查发现三个 P0：(1) `ReapRequest::Drop` 在 `confirmed=false` 时仍自动 drop `Child` 字段，只泄漏计数不能保留 wait 能力（探针先 `start_kill()` 再 drop request，PID 两秒后未回收）；(2) 所有组件死亡时 `mem::forget(req)` 永久泄漏句柄/zombie/admission；(3) 组件存活位只影响新请求，stuck/worker/orphan 已持有的请求不会在组件退出后迁移（真实 stuck/orphan 线程探针中 stuck 退出后 PID 未被 orphan 回收）。
-- **P0 权威 ChildRegistry**：删除 `ReapRequest`，新建 `ChildRegistry`（`HashMap<ChildId, RegistryEntry>`）——registry 持有唯一 `Child` handle 直到 `try_wait` 确认终态。worker/stuck/orphan 队列仅携带 `ChildId`（u64），不持有最后一个 handle。`register()` 立即 `start_kill()`。`try_reap_once`/`try_reap_with_deadline` 在确认 `Exited`/`AlreadyReaped` 后移除 entry 并释放 in_flight。`fatal_cleanup()` 同步 kill+wait 全部剩余 child（替代 `mem::forget`）。
+- **P0 权威 ChildRegistry**：删除 `ReapRequest`，新建 `ChildRegistry`（`HashMap<ChildId, RegistryEntry>`）——~~registry 持有唯一 `Child` handle 直到 `try_wait` 确认终态。~~（round-16 审查推翻：运行期间唯一 handle 仍由 lease 持有，registry 仅在 ChildLease::drop 时接管 child。round-16 已修复——spawn 成功后通过 SpawnAdmission::components 绑定检查存活位，reaper 全死时不向死亡 registry 注册。）worker/stuck/orphan 队列仅携带 `ChildId`（u64），不持有最后一个 handle。`register()` 立即 `start_kill()`。`try_reap_once`/`try_reap_with_deadline` 在确认 `Exited`/`AlreadyReaped` 后移除 entry 并释放 in_flight。~~`fatal_cleanup()` 同步 kill+wait 全部剩余 child（替代 `mem::forget`）。~~（round-16 审查推翻：fatal_cleanup 在 timeout/Unknown 后仍减少 admission 并 entries.clear()，丢失未确认退出的 child handle。round-16 已修复——仅在 Exited/AlreadyReaped 时移除 entry 并释放，timeout/Unknown 保留 handle。）
 - **P0 组件死亡迁移**：`LivenessGuard` 新增 `registry` + `sender` 字段。drop 时：若所有组件死亡→`fatal_cleanup`（同步 kill+wait）；若有存活组件→`all_ids()` 重扫 registry 并 `try_send` 到存活 worker 队列。orphan reaper 的 `LivenessGuard` `sender=None`（靠周期扫描）。
 - **P0 无 reaper 路径**：`ChildLease::drop` 在 `ChildReaper::global()` 返回 `None` 时调用 `blocking_kill_and_reap`（同步 kill+wait+释放 in_flight），不再 `mem::forget`。
 - **trybuild compile-fail 门禁**：`api_boundary.rs` 从注释代码改为 `trybuild::TestCases::compile_fail`，验证外部 crate 无法访问 `confirm_exit`/`child_mut`/`new`（E0624/E0599）。
 - **测试**：所有 reaper 测试断言 PID 消失。新增 `all_dead_reaps_via_fatal_cleanup`（fatal_cleanup 后 PID 消失+registry 空）、`stuck_scheduler_reaps_registry_entries`（全局 reaper reaps registry entry）、`liveness_guard_rescan_reenqueues_pending`（组件 guard drop 后重扫+重新入队，PID 消失）、`no_reaper_synchronous_reap`（`blocking_kill_and_reap` 直接测试）、`mutex_poison_still_reaps`（poison 后 PID 消失+in_flight 恢复 0）、`cancellation_storm_stays_bounded`（32 child 并发 drop，in_flight 有界且最终恢复 0）。`liveness_guard_rescan_reenqueues_pending` 使用独立 components atomic 避免降级全局 reaper。
 - **已知测试覆盖缺口**（诚实记录，#97 保持 open）：事务化初始化的线程启动失败路径尚未注入真实失败（`OnceLock` 无法重入）；worker 持有 `ChildId` 时真实线程 panic 的端到端迁移尚未直接注入（`LivenessGuard::drop` 代码路径已通过手动 guard drop 测试覆盖，但未模拟真实线程 panic 触发）。这些缺口在 #97 关闭前需补充。
-- **验证**：sandbox-os 40 lib 测试 + 1 trybuild compile-fail；bwrap 49 测试（`--include-ignored`）；workspace `cargo test --all-features` 0 失败；clippy 零警告；`cargo fmt --all --check` 通过。multi-agent 100 passed + 2 ignored + clippy clean（pin 保持 `1be6859`）。#97/#98 保持 open。
+- ~~**验证**：sandbox-os 40 lib 测试 + 1 trybuild compile-fail；bwrap 49 测试（`--include-ignored`）；workspace `cargo test --all-features` 0 失败；clippy 零警告；`cargo fmt --all --check` 通过。~~（round-16 审查推翻：trybuild stderr 在 Windows/WSL 不匹配（E0601 因缺少 fn main），clippy::for_kv_map 在 Rust 1.97.1 触发。远端 CI 因 billing 限制未执行。round-16 已修复——见下方。）multi-agent 100 passed + 2 ignored + clippy clean（pin 保持 `1be6859`）。#97/#98 保持 open。
+
+### 2026-07-31 runtime issue #97 round-16 审查修复
+
+- **背景**：round-16 审查发现三个问题：(P0) `fatal_cleanup` 和 `blocking_kill_and_reap` 在 deadline 到期或 Unknown 后仍减少 admission 并 drop 唯一 Child handle——只有 Exited/AlreadyReaped 可以移除 entry 并释放 admission；(P0) 运行期间唯一 handle 仍由 lease 持有，registry 仅在 `ChildLease::drop` 时接管——reaper 全死后晚注册的 lease 会向死亡 registry 提交 child（PID 两秒后仍存在）；(P1) `try_reap_once` 对已不存在的 ID 返回 true，worker/stuck/orphan 随后都增加 completed（同一 ChildId 入队 8 次，completed 增加 8）。交付门禁实际未通过：trybuild stderr 在 Windows/WSL 不匹配（缺少 `fn main` 导致 E0601），clippy::for_kv_map 在 Rust 1.97.1 触发。
+- **P0 fatal_cleanup 条件释放**：`fatal_cleanup` 改为返回 `usize`（未回收数）。仅在 `Exited`/`AlreadyReaped` 时移除 entry 并释放 in_flight；`Pending`/timeout/`Unknown` 保留 entry 和 handle。不再 `entries.clear()`。`LivenessGuard::drop` 记录未回收数为 failure 指标。
+- **P0 blocking_kill_and_reap 条件释放**：改为返回 `bool`。成功时释放 in_flight；失败时将 handle 存入 static `Mutex<Vec<Child>>`（不 drop，不释放 in_flight）——进程退出时 OS 回收。
+- **P0 晚注册防护**：`SpawnAdmission` 新增 `components: Option<Arc<AtomicU8>>` 字段（绑定产生它的 reaper）。`ChildLease` 同步携带该字段。`ChildLease::drop` 检查 components 存活位：若全部死亡，使用 `blocking_kill_and_reap` 而非向死亡 registry 注册。新增 `ChildReaper::any_components_alive()` 方法。
+- **P1 ReapResult exactly-once**：`try_reap_once`/`try_reap_with_deadline` 改为返回 `ReapResult` enum（`ConfirmedNow`/`AlreadyAbsent`/`Pending`/`Unknown`）。只有 `ConfirmedNow` 增加完成计数。worker/stuck/orphan 循环使用 `if let ReapResult::ConfirmedNow`。
+- **trybuild 修复**：UI fixture 添加 `fn main() {}` 消除 E0601。重新生成 `.stderr`（仅含 E0624/E0599）。
+- **clippy 修复**：`single_match` → `if let`；`collapsible_if` → `&&` 条件合并。`fatal_cleanup` 用 `for id in ids` + `get_mut` 替代 `for (_, entry) in iter_mut()`（消除 `for_kv_map`）。
+- **测试**：新增 `fatal_cleanup_releases_admission_on_success`（in_flight 恢复 0）、`fatal_cleanup_returns_zero_when_all_reaped`、`blocking_kill_and_reap_releases_admission_on_success`、`late_registration_dead_reaper_uses_blocking_reap`（components=0 时 PID 消失）、`late_registration_alive_reaper_registers_to_registry`（components=COMP_ALL 时 PID 消失）、`exactly_once_completed_metric`（同一 ID 8 次 try_reap_once，仅首次 ConfirmedNow）、`try_reap_with_deadline_exactly_once`、`any_components_alive_check`。
+- **已知测试覆盖缺口**（#97 保持 open）：线程启动失败注入（OnceLock 不可重入）和真实 worker panic 端到端迁移仍未直接注入。fatal_cleanup/blocking_kill_and_reap 的 timeout/Unknown 失败路径无法在没有 D-state child 的情况下确定性测试。
+- **验证**：sandbox-os 48 lib 测试 + 1 trybuild compile-fail；bwrap 49 测试（`--include-ignored`）；workspace `cargo test --all-features` 0 失败；clippy 零警告；`cargo fmt --all --check` 通过。远端 CI 因 GitHub billing 限制未执行，本地验证通过。multi-agent 100 passed + 2 ignored + clippy clean（pin 保持 `1be6859`）。#97/#98 保持 open。
 
 ### 2026-07-31 runtime issue #97 round-11 审查修复（commit 943e4aa）
 
