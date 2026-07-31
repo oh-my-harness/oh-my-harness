@@ -636,6 +636,35 @@ model_check_feedback → calibration_report 全部通过。
 - **验证**：sandbox-os 48 lib 测试 + 1 trybuild compile-fail；bwrap 49 测试（`--include-ignored`）；workspace `cargo test --all-features` 0 失败；clippy 零警告；`cargo fmt --all --check` 通过。远端 CI 因 GitHub billing 限制未执行，本地验证通过。multi-agent 100 passed + 2 ignored + clippy clean（pin 保持 `1be6859`）。#97/#98 保持 open。
 - **round-16 错误表述修正**：round-16 声称"registry 始终持有唯一 handle"——实际运行期间 handle 仍由 lease 持有（round-17 已修复：`into_lease` 立即 `commit_child`）。声称"全部门禁通过"——trybuild stderr 在 Windows/WSL 不匹配（round-17 已替换为版本无关 API surface 测试）。声称"exactly-once"——`try_reap_once` 对已不存在 ID 也返回 true（round-17 已修复：只有移除 entry 的调用返回 `ConfirmedNow`）。
 
+### 2026-07-31 runtime issue #97 round-18 结构性完善
+
+- **背景**：round-17 的单一 Mutex<SupervisorInner> 方向正确，但审查发现：(P0) `cancel_child` 在 Failed 状态取出 handle 后锁外 `blocking_reap`，panic 时局部 `Box<dyn Reapable>` 被 drop，registry 只剩 `reapable=None`；(P0) all-dead 后无最终回收 owner，unreaped entry 无线程重试；(P1) `try_admit` 与 `commit_child` 是两次独立加锁，`SpawnAdmission` 无 epoch，Degraded 后 commit 仍标记 `active=true`；(P1) worker 位掩码一个 worker 退出清除整个位；(P1) `fatal_cleanup_locked` 在 mutex 内按 child 最多等 5 秒，容量 256 时可阻塞约 21 分钟；(P1) API boundary test 非真正 compile-fail 门禁。
+- **P0 CheckoutGuard RAII**：新增 `CheckoutGuard` 结构体——从 registry 取出 `Box<dyn Reapable>` 用于锁外 `blocking_reap`。`Drop` 在 `consumed=false` 时自动将 handle 恢复到 registry entry（panic-safe）。只有 `consume()`（确认终态后）才移除 entry + 释放 admission。`restore()` 将 handle 放回并设置 `active=false`（确保 emergency 线程可重试）。`cancel_child_with_core` 在 Failed 状态使用 `CheckoutGuard` 而非裸 `Box`。
+- **P0 Emergency recovery owner**：新增 `emergency_loop` 线程（在 `init_reaper` 中始终启动）。当 supervisor 非 Healthy 时，扫描 `pending_ids()`，通过 `checkout_for_fatal` 取出 handle，在锁外 `blocking_reap`。单线程、有界（每 child `fatal_reap_timeout`，每 pass `FATAL_CLEANUP_TOTAL_BUDGET` 30s）。所有 reaper 死亡后，emergency 线程成为唯一回收 owner。`ComponentLiveness` 新增 `emergency_alive` 字段（初始 `true`，因为线程在 init 时启动）。
+- **P0 admission epoch**：`try_admit()` 返回 `Option<Epoch>`（不再只返回 `bool`）。`SpawnAdmission` 携带 `epoch: Epoch`。`commit_child(admit_epoch)` 验证 epoch 匹配当前 supervisor epoch——stale-epoch child 立即 kill 并标记 `active=false`。Degraded 转换时 `on_component_exit` 递增 epoch，使所有未 commit 的 admission 失效。
+- **P0 per-worker liveness count**：`ComponentLiveness` 用 `workers_alive: usize` 替换位掩码。一个 worker 死亡递减计数但不归零（除非是最后一个）。`all_dead()` 包含 `emergency_alive`——只有所有组件（含 emergency）都死亡才返回 true。`any_reaper_alive()` 不含 emergency（用于 stuck/orphan loop 决定何时让 emergency 接管）。
+- **P0 锁外 fatal cleanup**：`on_component_exit` 只在锁内做状态转换。实际回收由 emergency 线程通过 `checkout_for_fatal`（锁内取 handle）+ 锁外 `blocking_reap` 完成。`cancel_child_with_core` Failed 路径同理：锁内取 handle，锁外 `blocking_reap`。
+- **P0 ECHILD 非伪造成功**：`ReapStatus::AlreadyReaped` variant 表示 ECHILD——终态但退出状态未知。`ChildLease::wait()` 对 AlreadyReaped 返回 `Err`（包含 "unknown"），不伪造 `exit_status_from_raw(0)`。`try_reap` 和 `poll_exit` 对 ECHILD 移除 entry + 释放 admission + 递增 completed，但调用方不会报告成功。
+- **P1 真正 compile-fail API 门禁**：`tests/api_boundary.rs` 重写为真实 compile-fail 测试——写入临时 crate 依赖 `llm-harness-runtime-sandbox-os`，尝试调用 `ChildLease` 的私有方法（`confirm_exit`/`wait`/`kill_and_wait`/`take_stdout`），运行 `cargo build`，期望失败。不依赖编译器诊断文本，在任意 Rust 版本/平台工作。
+- **故障注入测试**（7 项新增，共 65 lib 测试）：
+  - `commit_child_after_degraded_kills_immediately`：Healthy 时取得 admission → Degraded → commit → child 立即 kill 且 non-active。
+  - `checkout_guard_panic_restores_handle`：`blocking_reap` panic 后 `CheckoutGuard::drop` 恢复 handle 到 registry，admission 保留。
+  - `emergency_thread_reaps_after_all_dead`：真实 `init_reaper` 线程，stale-epoch commit 后 emergency 线程在 5s 内回收 child。
+  - `single_worker_death_stays_degraded`：一个 worker 死亡（共 4 个）→ Degraded 而非 Failed，3 workers 仍存活。
+  - `try_reap_echild_releases_admission`：ECHILD → admission 释放 + completed 递增，返回 `ConfirmedNow(AlreadyReaped)`。
+  - `wait_echild_returns_error_not_success`：`wait()` 对 ECHILD 返回 `Err`（含 "unknown"），不伪造成功。
+  - `cancel_child_failed_state_real_child_reaped`：真实 `sleep 30` child 在 Failed 状态 lease drop 后 PID 消失。
+- **round-17 错误表述修正**：
+  - round-17 声称 "compile-fail 门禁由 Rust 可见性规则本身强制"——实际只是 API surface 正向测试，不是负向 compile-fail。round-18 已替换为真实 compile-fail 门禁。
+  - round-17 声称 worker 位掩码 "不影响正确性"——实际可导致误判 all-dead 并过早转入 Failed。round-18 已用 per-worker count 替换。
+  - round-17 "所有转换已线性化"——`try_admit` 与 `commit_child` 仍是两次独立加锁。round-18 通过 epoch 验证弥补：stale-epoch admission 的 child 立即 kill 且 non-active，不能作为正常 active command 继续。
+- **已知风险**（诚实报告）：
+  - `try_admit` 与 `commit_child` 非同一事务——两次独立加锁。epoch 验证确保 stale-epoch child 被立即 kill 并标记 non-active，但理论上 admit→commit 之间 supervisor 可能多次状态转换。生产中 spawn 几乎瞬时完成，窗口极小。
+  - all-dead（含 emergency）是终态——无 recovery owner，admission 永久关闭，remaining children 无法被 supervisor 回收。需要进程重启。emergency 线程是简单 loop，预期不会 crash。
+  - cgroup 强制限制未实现——admission bound（256）仅限制 in-flight child 数量，不限制 namespace 内后代进程对宿主 PID/内存/CPU/磁盘的消耗（#98）。
+  - 远端 CI 因 GitHub billing/spending 限制未执行——所有测试仅在本地 rustc 1.95.0 验证。
+- **验证**：sandbox-os 65 lib 测试；api_boundary 2 测试（真实 compile-fail）；bwrap 49 测试（`--include-ignored`）；workspace `cargo test --all-features` 全量通过（0 失败，25 bwrap ignored）；`cargo clippy --workspace --all-targets --all-features -- -D warnings` 零警告；`cargo fmt --all -- --check` 通过。远端 CI 未执行。#97/#98 保持 open，multi-agent pin 保持 `1be6859` fail-closed。
+
 ### 2026-07-31 runtime issue #97 round-17 结构性重构
 
 - **背景**：round-17 审查要求结构性重构而非增量补丁。七个确定性失败：(1) `ChildLease::drop` 在检查 components 与 registry.register 之间存在 TOCTOU；(2) `try_admit()` 健康检查与 in-flight 递增不原子；(3) `try_reap_with_deadline()` 观察终态后解锁再删除 entry，无条件返回 ConfirmedNow（completed 可重复计数）；(4) all-dead 后 registry entry 无存活 owner 重试，UNREAPED Vec 从不扫描；(5) UNREAPED mutex poison 时 drop 唯一 handle；(6) fatal_cleanup 共用 deadline；(7) trybuild stderr 版本不匹配。
