@@ -269,6 +269,37 @@ ArcGen 最新版移除了所有独立 pframe/fit_model 脚本模板（`pframe_li
 
 已验证对齐（无需修改）：`fit_model_codegen.py`（完全一致）、`effectiveness_check.py`/`term_advisor_ops.py`/`decision_cache.py`（仅注释/风格差异）、`pick_winner`/`_shallow_pool_for_pangen`/`_kill_stale_pangen`/`_append_beam_summary`/`_build_resist_model`/`_finalize`（逻辑一致）、`force_upgrade_group`/`_r0_group_eval_done`/`precheck_rejected`（逻辑一致）、`_REQUIRED_PATTERNS`/`_OPTIONAL_PATTERNS`（完全一致）、config 值（PANGEN_SUBMIT_STAGGER/PANGEN_TRIAL_TIMEOUT/SSH_CONNECT_TIMEOUT 等全部匹配）。56 测试通过，17 跳过。
 
+**2026-08-11 small_case1 双跑验证（确定性节点产物比对）**：
+
+使用 `small_case1` 在 `default` 模式（无 LLM）下对 ArcGen（`087eba2`）与 eda-agent-py 进行双跑验证，
+比对确定性节点（init_job → build_calibration_context → data_clean → gauge_check → gauge_group → prepare_job）
+的全部产物。发现并修复 3 处环境/依赖缺口：
+
+- **`klayout` 未安装**（gauge_check 降级为 SKIPPED）：eda-agent-py venv 缺少 `klayout` 包，
+  导致 `gauge_check` 的 3 项几何检查全部跳过（`overall_status=SKIPPED`，`per_gauge_results=[]`），
+  而 ArcGen 正常执行（`overall_status=PASS`，12 gauge 逐条检查）。安装 `klayout==0.30.9` 后对齐
+- **`pydantic` 未安装**（calibration_context 验证静默跳过）：eda-agent-py venv 缺少 `pydantic`，
+  `_validate_ctx` 中 `_HAS_PYDANTIC=False` 导致 schema 验证被完全跳过，`film_stack.thickness` 保留
+  int 类型（`30`）而非 ArcGen 的 float（`30.0`），进而 `fit_model.py` 生成的 `add_film_layer()`
+  参数格式不一致。安装 `pydantic==2.13.4` 后对齐
+- **BO 子进程依赖缺失**：`langgraph`、`langchain-core`、`aiohttp`、`httpx`、`click` 未安装，
+  导致 mask_search BO 子进程无法 import `langgraph_pipeline` 模块。已全部安装对齐 ArcGen venv 版本
+- **`pyproject.toml` 依赖更新**：将 `pydantic`、`pandas`、`klayout` 加入核心 dependencies；
+  新增 `[project.optional-dependencies] bo` 组（`langgraph`、`langchain-core`、`aiohttp`、`httpx`、`click`）
+
+双跑产物比对结果（全部 ✓ IDENTICAL）：
+  `pframe.py`、`_lite_flow.py`、`_autoweight.py`、`_bo_eval.py`、`fit_model.py`、
+  `cal.txt`、`calibration_gauges.txt`、`val.txt`、`validation_gauges.txt`、
+  `lite/group_name.txt`、`lite/term_pool.json`、
+  `data_process/cal_cleaned.txt`、`data_process/cal_cleaned_grouped.txt`、
+  `data_process/calibration_gauges_annotated.txt`、
+  `gauge_check_report.json`（overall=PASS, 12 gauges, 0 mismatch）
+
+**⚠️ 已知阻塞：PanGen license server（lmgrd）未运行**：
+mask_search BO 的 `compute_tcc` session 需要 `model_ntd` license feature，但 FlexLM license server
+未启动（`error code -15: Cannot connect to license server system`）。所有 BO trial 以 rc=-11
+（SIGSEGV）失败。无法验证 mask_search 及后续节点的产物对齐。需运维启动 license server 后重跑。
+
 **`fit_model_codegen.py` 已移植**（commit `10fdb09`）：从 ArcGen 移植 722 行 codegen 模块，
   `prepare_job` 调用 `generate_fit_model_script()` 生成 case 专用 `fit_model.py`（NA、film_stack、
   substrate、TNP/tone、3DM sectors、GDS layers 等全部从 `calibration_context.json` 内联）。
