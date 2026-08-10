@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-01（runtime issue #97 round-19：emergency_loop panic 隔离（catch_unwind + backoff + failure count）；API boundary 测试改为可信门禁（positive control + per-method negative control + stderr 隐私诊断检查 + --offline）；emergency_loop takeover predicate 改为 `!any_reaper_alive()`（仅普通 reaper 全死后接管）；per-child timeout 使用 `min(per_child, remaining_pass_budget)`；新增真实线程故障测试（worker panic → Degraded + 子进程最终回收、emergency spawn failure rollback、epoch fencing end-to-end）；`worker_failures` 改名 `component_failures`；修正 bwrap/drop 注释；#99 创建用于 shell output OOM 独立 blocker。70 sandbox-os lib + 10 api_boundary + 49 bwrap + workspace 全量通过，clippy 零警告，fmt 通过。远端 CI 未执行。已知风险：try_admit 与 commit_child 仍非同一事务（epoch 弥补）；all-dead（含 emergency）是终态；cgroup 强制限制未实现（#98）；shell drain 路径无界 buffer（#99）。#97/#98/#99 保持 open，multi-agent pin 保持 1be6859 fail-closed。）
+> 最后更新：2026-08-11（runtime issue #97 round-19：emergency_loop panic 隔离（catch_unwind + backoff + failure count）；API boundary 测试改为可信门禁（positive control + per-method negative control + stderr 隐私诊断检查 + --offline）；emergency_loop takeover predicate 改为 `!any_reaper_alive()`（仅普通 reaper 全死后接管）；per-child timeout 使用 `min(per_child, remaining_pass_budget)`；新增真实线程故障测试（worker panic → Degraded + 子进程最终回收、emergency spawn failure rollback、epoch fencing end-to-end）；`worker_failures` 改名 `component_failures`；修正 bwrap/drop 注释；#99 创建用于 shell output OOM 独立 blocker。70 sandbox-os lib + 10 api_boundary + 49 bwrap + workspace 全量通过，clippy 零警告，fmt 通过。远端 CI 未执行。已知风险：try_admit 与 commit_child 仍非同一事务（epoch 弥补）；all-dead（含 emergency）是终态；cgroup 强制限制未实现（#98）；shell drain 路径无界 buffer（#99）。#97/#98/#99 保持 open，multi-agent pin 保持 1be6859 fail-closed。）
 
 ---
 
@@ -234,6 +234,28 @@ llm_adapter = { path = "../llm-api-adapter" }
 
 
 ### eda-agent-py ✅ ArcGen 对齐 — E2E 全流程跑通
+
+**2026-08-11 ArcGen `087eba2` pframe.py 统一架构对齐**：
+
+ArcGen 最新版移除了所有独立 pframe/fit_model 脚本模板（`pframe_lite.py`、`pframe_resist_tune.py`、
+`pframe_bo_resist_search.py`、`fit_model_bo_resist.py`、`fit_resist_model_ntd_w7.py` 等），
+改为统一的 `pframe.py` + `fit_model.py` + `scene_config.json` 架构。eda-agent-py 全面对齐：
+
+- **config/cli**：默认 `arcgen_dir` 从 `/data/leiqiaojie2/ArcGen`（旧）更新为 `/data/leiqiaojie/ArcGen`（最新）
+- **amc_dir() 修复**：从 `__file__` 定位（指向不存在的 `eda_agent_py/amc_template/`）改为 `arcgen_dir` 定位
+- **resist_tune_ga**：`pframe_resist_tune.py` → 统一 `pframe.py` + 写 `scene_config.json`（scene=resist_tune, iters=100）
+- **resist_tune_bo**：`_generate_fit_model_bo_resist` → `_generate_fit_model_bo`，使用统一 `fit_model.py` 模板 + ArcGen 正则注入；
+  BO validation 写 `scene_config.json`（scene=bo_resist_val, iters=1）
+- **term_selection_lite**：`pframe_lite.py` → 统一 `pframe.py` + 写 `scene_config.json`（scene=lite, iters=40）
+- **beam_runner**：`_REQUIRED_PATTERNS` 更新（`fit_model.py` + `_autoweight.py`/`_bo_eval.py`/`_lite_flow.py`）；
+  每个 candidate 写 `lite_env.json`（SSH 环境传递）+ `scene_config.json`（scene=lite）
+- **inject_mask_params_to_script**：从读旧模板改为读 `target_path`（由 prepare_job 复制），
+  新增 `.src`/`.oas` 文件名修正（从 `calibration_context.json` 读取）
+- **prepare_job**：模板文件列表更新为统一 `pframe.py` + `fit_model.py` + 依赖模块
+- 测试：81 passed, 17 skipped, 4 pre-existing failures（test_mask_search_engine，与本次变更无关）
+
+**已知缺口**：`fit_model_codegen.py`（722 行）未移植 — 当前从模板复制 `fit_model.py`（含 runtime term 加载），
+  对于非默认 case 需要移植 codegen 以内联 case 专属参数。
 
 **2026-07-25 simple_case1 V2 验证通过（issue #52 修复确认）**：
 
