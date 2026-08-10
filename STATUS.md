@@ -254,8 +254,10 @@ ArcGen 最新版移除了所有独立 pframe/fit_model 脚本模板（`pframe_li
 - **prepare_job**：模板文件列表更新为统一 `pframe.py` + `fit_model.py` + 依赖模块
 - 测试：81 passed, 17 skipped, 4 pre-existing failures（test_mask_search_engine，与本次变更无关）
 
-**已知缺口**：`fit_model_codegen.py`（722 行）未移植 — 当前从模板复制 `fit_model.py`（含 runtime term 加载），
-  对于非默认 case 需要移植 codegen 以内联 case 专属参数。
+**`fit_model_codegen.py` 已移植**（commit `10fdb09`）：从 ArcGen 移植 722 行 codegen 模块，
+  `prepare_job` 调用 `generate_fit_model_script()` 生成 case 专用 `fit_model.py`（NA、film_stack、
+  substrate、TNP/tone、3DM sectors、GDS layers 等全部从 `calibration_context.json` 内联）。
+  `beam_runner` 每个 candidate 重新 codegen（不同 group/terms）。默认 NTD group 修正为 `ntd_1x_1`。
 
 **2026-07-25 simple_case1 V2 验证通过（issue #52 修复确认）**：
 
