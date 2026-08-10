@@ -254,6 +254,21 @@ ArcGen 最新版移除了所有独立 pframe/fit_model 脚本模板（`pframe_li
 - **prepare_job**：模板文件列表更新为统一 `pframe.py` + `fit_model.py` + 依赖模块
 - 测试：81 passed, 17 skipped, 4 pre-existing failures（test_mask_search_engine，与本次变更无关）
 
+**2026-08-11 ArcGen `087eba2` 深度对齐审查（lite pipeline 全量比对）**：
+
+系统对比 ArcGen `087eba2` 与 eda-agent-py 的 lite/ 目录全部文件 + 关键节点文件，发现并修复 10 处不对齐：
+
+- **term_pool.json 全量同步**（commit `0b3c1f8`）：eda-agent-py 缺少 3 个 group（`ntd_1x_1`/`ntd_2x_1`/`ptd_1`），且全部 9 个已有 group 的参数范围与 ArcGen 不一致（如 ptd sigma 30-100 vs ArcGen 40-300）。直接从 ArcGen 同步完整 term_pool.json
+- **`_GROUP_DESC` 补全**：`term_advisor_prompts.py` 缺少 `ntd_1x_1` 描述，影响 `select_initial_group` LLM prompt
+- **F-51 PanGen 异常恢复**（async `_run_pangen`）：eda-agent-py 的 `nodes/_common.py:_run_pangen` 缺少 gateway 断连指数退避（1→2→4→8→16→30s，max 6 次）+ worker crash 单次重提交（10s delay）+ `crash_recovery.jsonl` 事件记录。ArcGen 的 `submit_with_recovery` 已实现这些。已移植完整 F-51 逻辑
+- **`server_ip` SSH 远程提交**：`_run_pangen` 缺少 `server_ip` 参数，beam_runner 未传递 `server_ip=server_ip`。导致多服务器 `WORKER_NODES` 配置下所有 candidate 仍本地提交。已添加 SSH 远程提交支持 + 本机 IP 检测
+- **`experience_cache.py` schema v5→v6**（commit `7a61ded`）：缺少 `_extract_winner_path`（从 `iteration_log.jsonl` 提取每轮 winner 优化路径）+ `fit_script_hash` 参数/字段 + `_build_case_info` 辅助函数。`term_selection.py` 未传递 `fit_script_hash=ctx.get(...)` 到 `save_experience`
+- **`_effective_group` 逻辑缺失**：beam_runner 中 `group_eval` 候选必须用 `candidate.target_term` 作为 group_name 传给 `_prepare_candidate_dir`，否则所有 group_eval 候选用 R0 的 group_name 导致 term_pool 覆写错位
+- **`MAX_ROUNDS` 默认值**：`lite_config.py` 默认 11（R0+R1~R10），ArcGen 默认 5（R0+R1~R4，多服务器并行后减少轮次）
+- **retry 模式 `upgrade_group` 过滤缺失**（commit `65a84b4`）：retry 模式下 ArcGen 过滤掉 LLM 生成的 `upgrade_group` 候选（首次已充分尝试），eda-agent-py 未过滤导致 retry 浪费 beam slot
+
+已验证对齐（无需修改）：`fit_model_codegen.py`（完全一致）、`effectiveness_check.py`/`term_advisor_ops.py`/`decision_cache.py`（仅注释/风格差异）、`pick_winner`/`_shallow_pool_for_pangen`/`_kill_stale_pangen`/`_append_beam_summary`/`_build_resist_model`/`_finalize`（逻辑一致）、`force_upgrade_group`/`_r0_group_eval_done`/`precheck_rejected`（逻辑一致）、`_REQUIRED_PATTERNS`/`_OPTIONAL_PATTERNS`（完全一致）、config 值（PANGEN_SUBMIT_STAGGER/PANGEN_TRIAL_TIMEOUT/SSH_CONNECT_TIMEOUT 等全部匹配）。56 测试通过，17 跳过。
+
 **`fit_model_codegen.py` 已移植**（commit `10fdb09`）：从 ArcGen 移植 722 行 codegen 模块，
   `prepare_job` 调用 `generate_fit_model_script()` 生成 case 专用 `fit_model.py`（NA、film_stack、
   substrate、TNP/tone、3DM sectors、GDS layers 等全部从 `calibration_context.json` 内联）。
