@@ -286,14 +286,19 @@ ArcGen 最新版移除了所有独立 pframe/fit_model 脚本模板（`pframe_li
   导致 mask_search BO 子进程无法 import `langgraph_pipeline` 模块。已全部安装对齐 ArcGen venv 版本
 - **`pyproject.toml` 依赖更新**：将 `pydantic`、`pandas`、`klayout` 加入核心 dependencies；
   新增 `[project.optional-dependencies] bo` 组（`langgraph`、`langchain-core`、`aiohttp`、`httpx`、`click`）
+- **gauge_check LLM 报告移除**（commit `7cff045`）：ArcGen 的 gauge_check 节点接受 `reporter` 参数
+  但函数体内从未调用（F-48 注释提到但未实现）。eda-agent-py 却在 gauge_check 里调了
+  `single_llm_call_json()` 生成 `llm_report` 字段，并额外加了 `check_4_misc` 字段。
+  default 模式下这导致 23s 延迟（LLM 调用）vs ArcGen 的 3s，且产物多了两个字段。
+  已移除 LLM 调用 + `llm_report` + `check_4_misc`，并修复 early SKIPPED 路径的 `counts` 格式
 
-双跑产物比对结果（全部 ✓ IDENTICAL）：
+双跑产物比对结果（全部 ✓ IDENTICAL，含 gauge_check_report.json 深度比对）：
   `pframe.py`、`_lite_flow.py`、`_autoweight.py`、`_bo_eval.py`、`fit_model.py`、
   `cal.txt`、`calibration_gauges.txt`、`val.txt`、`validation_gauges.txt`、
   `lite/group_name.txt`、`lite/term_pool.json`、
   `data_process/cal_cleaned.txt`、`data_process/cal_cleaned_grouped.txt`、
   `data_process/calibration_gauges_annotated.txt`、
-  `gauge_check_report.json`（overall=PASS, 12 gauges, 0 mismatch）
+  `gauge_check_report.json`（keys 一致 + 内容 byte-identical，12 gauges, 0 mismatch）
 
 **⚠️ 已知阻塞：PanGen license server（lmgrd）未运行**：
 mask_search BO 的 `compute_tcc` session 需要 `model_ntd` license feature，但 FlexLM license server
@@ -304,6 +309,16 @@ mask_search BO 的 `compute_tcc` session 需要 `model_ntd` license feature，�
   `prepare_job` 调用 `generate_fit_model_script()` 生成 case 专用 `fit_model.py`（NA、film_stack、
   substrate、TNP/tone、3DM sectors、GDS layers 等全部从 `calibration_context.json` 内联）。
   `beam_runner` 每个 candidate 重新 codegen（不同 group/terms）。默认 NTD group 修正为 `ntd_1x_1`。
+
+**2026-08-11 pipeline_result.json 聚合产物（Issue #77）**：
+
+ArcGen 与 eda-agent-py 同步实现：Pipeline 结束时从内存 state 聚合各阶段结构化结果到
+只读的 `pipeline_result.json`，写入 job_dir。8 个阶段的关键指标在一个 JSON 中可读：
+`calibration_context` / `gauge_check` / `mask_params` / `selected_terms` /
+`resist_model` / `model_check` / `feedback` / `gauge_error_attribution`。
+设计要点：读端聚合（不读磁盘文件）、只写一次（永不更新）、不替代散落文件
+（PanGen 接口契约和节点间通信通道保持不变）。已有先例：`best_snapshot/best_summary.json`。
+ArcGen MR !337，eda-agent-py commit `9cf1b00`。
 
 **2026-07-25 simple_case1 V2 验证通过（issue #52 修复确认）**：
 
