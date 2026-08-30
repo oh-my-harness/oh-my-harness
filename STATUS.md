@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` 本地 LLM 收尾：团队成员统一设置 16K output budget；runner 在 run 正常返回但存在内部错误时记录 `error_message`。studio 97 单元 + 5 mock 集成测试通过，1 个 ignored 本地 LLM E2E 显式运行通过，4.54s 收到 confirmed 回复。workspace mock 回归通过；`llm-harness-live-tests` 因默认 live provider 配置按 mock 口径排除。）
+> 最后更新：2026-08-31（`feat/agent-team-studio` 闭环回归：新增 planner→coder→planner→judge→operator 跨成员接力测试，覆盖 delegate_task、task_id 回复、联系人自动建立和 operator 汇报。studio 97 单元 + 6 mock 集成测试通过，fmt/clippy 通过。此前本地 LLM 单成员 E2E 已通过，4.54s 收到 confirmed 回复。workspace mock 回归通过；`llm-harness-live-tests` 因默认 live provider 配置按 mock 口径排除。）
 
 ---
 
