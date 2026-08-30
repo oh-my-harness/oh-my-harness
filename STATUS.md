@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-11（runtime issue #97 round-19：emergency_loop panic 隔离（catch_unwind + backoff + failure count）；API boundary 测试改为可信门禁（positive control + per-method negative control + stderr 隐私诊断检查 + --offline）；emergency_loop takeover predicate 改为 `!any_reaper_alive()`（仅普通 reaper 全死后接管）；per-child timeout 使用 `min(per_child, remaining_pass_budget)`；新增真实线程故障测试（worker panic → Degraded + 子进程最终回收、emergency spawn failure rollback、epoch fencing end-to-end）；`worker_failures` 改名 `component_failures`；修正 bwrap/drop 注释；#99 创建用于 shell output OOM 独立 blocker。70 sandbox-os lib + 10 api_boundary + 49 bwrap + workspace 全量通过，clippy 零警告，fmt 通过。远端 CI 未执行。已知风险：try_admit 与 commit_child 仍非同一事务（epoch 弥补）；all-dead（含 emergency）是终态；cgroup 强制限制未实现（#98）；shell drain 路径无界 buffer（#99）。#97/#98/#99 保持 open，multi-agent pin 保持 1be6859 fail-closed。）
+> 最后更新：2026-08-30（`feat/agent-team-studio` 初步收尾：装配前校验 team id / member id 唯一性 / handoff 目标，阻止团队目录与模板目录路径逃逸；成员 live-update 前校验 toolkit；隔离测试团队 memory/session 临时目录。studio 84 单元 + 5 集成测试通过，clippy 与 fmt 通过。）
 
 ---
 
@@ -829,3 +829,14 @@ model_check_feedback → calibration_report 全部通过。
 - **是否测过**：是，但仅用 mock。14 单元测试 + 22 workflow 测试全过（`MockLlmClient` + `ScriptedCriticRunner`）。唯一的真实 LLM 端到端测试 `codex_login_produces_audited_runtime_workflow_review` 带 `#[ignore]`（需本地 Codex login + live 请求），默认不跑。即：确定性逻辑有 mock 覆盖，真实模型 E2E 未跑。
 - **何时触发多 Agent**：不自动触发。它是一个 workflow review checkpoint——在 runtime `WorkflowEngine` 里把某个 step 的 executor 注册为 `MultiAgentReviewExecutor`，workflow 走到该 step 时才调用。Critic 以独立 LLM session（隔离上下文，只看产物快照 + rubric）审查 Doer 的产物，路由到 `pass` / `revise` / `escalate` / `abort`。需显式在 workflow 配置中接入，背后由 `runtime` feature 开关。
 - **结论**：多 Agent 目前是"可接线、有 mock 验证"的 checkpoint 机制，尚未在真实 LLM 下端到端验证过，也未接入任何生产 workflow。
+
+### 2026-08-30 agent-team-studio 初步收尾
+
+**仓库**：`llm-harness-runtime`，分支 `feat/agent-team-studio`（远端 `90b9787`）。
+
+- **装配校验收口**：`TeamSpec` 现在在 assemble 前拒绝空/相对路径逃逸的 team id、重复 member id、空 member id，以及指向不存在成员的 `Handoff` 目标。避免创建团队时目录写到 `teams/` 之外，也避免启动后 handoff 变成静默失败。
+- **模板目录安全**：`TemplateStore` 拒绝包含路径分隔符、`.`、`..` 或 NUL 的模板 id；用户目录列表只接受目录名与模板 JSON 内 id 一致的模板，load 时也校验这一致性。
+- **成员更新校验**：`TeamManager::update_member` 在改动生效和持久化前重新校验 toolkit，避免 live update 绕过 assemble 的 fail-fast 约束。
+- **测试稳定性**：pulse/scout 单测为每个 team 使用独立 memory/session 临时目录，消除并发测试共享默认 `agent-team-memory` 导致 SQLite 初始化竞态。
+- **验证**：`cargo test -p llm-harness-agent-team-studio` 通过 84 个单元测试 + 5 个集成测试；`cargo clippy -p llm-harness-agent-team-studio --all-targets -- -D warnings` 通过；`cargo fmt --check` 通过。
+- **下一步**：保持 `coding-team` 作为模板数据而非代码内角色，继续补 MCP toolkit、真实 LLM 稳定性、team 生命周期恢复与 UI 操作流验证。
