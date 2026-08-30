@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-30（`feat/agent-team-studio` MCP 生命周期修复：MCP manager 通过 RAII guard 绑定到 TeamEntry，Drop 时取消后台连接任务；lock 文件指向 data_dir 避免写入 CWD；错误信息带成员归属；连接后校验 ConnectionStatus。studio 97 单元 + 5 集成测试通过，clippy 与 fmt 通过。）
+> 最后更新：2026-08-31（`feat/agent-team-studio` 本地 LLM 收尾：团队成员统一设置 16K output budget；runner 在 run 正常返回但存在内部错误时记录 `error_message`。studio 97 单元 + 5 mock 集成测试通过，1 个 ignored 本地 LLM E2E 显式运行通过，4.54s 收到 confirmed 回复。workspace mock 回归通过；`llm-harness-live-tests` 因默认 live provider 配置按 mock 口径排除。）
 
 ---
 
