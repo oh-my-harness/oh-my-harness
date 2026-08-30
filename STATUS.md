@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` review 闭环回归：新增 NEEDS_CHANGES 回流与 PASS 汇报全链路测试，发现并修复 studio 声明式成员缺少 reviewer→judge 直连联系人的问题。studio 7 个 mock 集成测试通过，fmt/clippy 通过。此前本地 LLM 单成员 E2E 已通过，4.54s 收到 confirmed 回复。workspace mock 回归通过；`llm-harness-live-tests` 因默认 live provider 配置按 mock 口径排除。）
+> 最后更新：2026-08-31（`feat/agent-team-studio` 本地 LLM 多成员 E2E 通过：planner→reviewer→judge→planner→coder→planner→judge→operator 实跑 162.87s，operator 收到 PASS。studio 7 个 mock 集成测试通过，fmt/clippy 通过。此前已修复 reviewer→judge 直连联系人缺口。workspace mock 回归通过；`llm-harness-live-tests` 因默认 live provider 配置按 mock 口径排除。）
 
 ---
 
@@ -829,6 +829,14 @@ model_check_feedback → calibration_report 全部通过。
 - **是否测过**：是，但仅用 mock。14 单元测试 + 22 workflow 测试全过（`MockLlmClient` + `ScriptedCriticRunner`）。唯一的真实 LLM 端到端测试 `codex_login_produces_audited_runtime_workflow_review` 带 `#[ignore]`（需本地 Codex login + live 请求），默认不跑。即：确定性逻辑有 mock 覆盖，真实模型 E2E 未跑。
 - **何时触发多 Agent**：不自动触发。它是一个 workflow review checkpoint——在 runtime `WorkflowEngine` 里把某个 step 的 executor 注册为 `MultiAgentReviewExecutor`，workflow 走到该 step 时才调用。Critic 以独立 LLM session（隔离上下文，只看产物快照 + rubric）审查 Doer 的产物，路由到 `pass` / `revise` / `escalate` / `abort`。需显式在 workflow 配置中接入，背后由 `runtime` feature 开关。
 - **结论**：多 Agent 目前是"可接线、有 mock 验证"的 checkpoint 机制，尚未在真实 LLM 下端到端验证过，也未接入任何生产 workflow。
+
+### 2026-08-31 agent-team-studio 本地 LLM review 闭环 E2E
+
+**仓库**：`llm-harness-runtime`，分支 `feat/agent-team-studio`（远端 `1528756`）。
+
+- **覆盖扩展**：新增 ignored 测试 `live_llm_review_loop_reaches_operator`，使用本地 OpenAI 兼容端点和 `moonshotai/kimi-k2.6` 驱动 planner、reviewer、coder、judge 四个真实成员。
+- **实跑结果**：完整链路 planner→reviewer→judge→planner（NEEDS_CHANGES）→coder→planner→judge→operator（PASS）通过，耗时 162.87s，operator 收到 `## 总体结论: PASS`。
+- **验证**：默认 `--test integration` 通过 7 个 mock 集成测试（2 个 live 测试按预期 ignored）；`cargo fmt --all -- --check` 通过；`cargo clippy -p llm-harness-agent-team-studio --all-targets -- -D warnings` 通过。
 
 ### 2026-08-31 agent-team-studio review 闭环联系人修复
 
