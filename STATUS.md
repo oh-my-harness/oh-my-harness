@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-30（`feat/agent-team-studio` 初步收尾：装配前校验 team id / member id 唯一性 / handoff 目标，阻止团队目录与模板目录路径逃逸；成员 live-update 前校验 toolkit；成员密钥写入移到 project/agent 校验之后且不再落 team.json；隔离测试团队 memory/session 临时目录。studio 85 单元 + 5 集成测试通过，clippy 与 fmt 通过。）
+> 最后更新：2026-08-30（`feat/agent-team-studio` 初步收尾：装配前校验 team id / member id 唯一性 / handoff 目标，阻止团队目录与模板目录路径逃逸；成员 live-update 前校验 toolkit；成员密钥写入移到 project/agent 校验之后且不再落 team.json；key-only 变更也触发 rebuild；隔离测试团队 memory/session 临时目录。studio 86 单元 + 5 集成测试通过，clippy 与 fmt 通过。）
 
 ---
 
@@ -839,6 +839,7 @@ model_check_feedback → calibration_report 全部通过。
 - **成员更新校验**：`TeamManager::update_member` 在改动生效和持久化前重新校验 toolkit，避免 live update 绕过 assemble 的 fail-fast 约束。
 - **成员密钥路径安全**：`PUT /api/team/agent/config` 现在先校验 project/agent 存在，再写 0600 secrets 文件；新增回归测试覆盖 `project`/`agent` 携带 `..` 的路径逃逸场景。
 - **成员密钥持久化安全**：member provider override 的明文 key 只在 rebuild 装配前注入临时副本，`team.json` / entry spec 仍保留空占位；回归测试确认 `team.json` 不包含明文。
+- **key-only 变更生效**：`update_member` 接收显式 `key_changed` 信号，即使 model/base_url/toolkit 没变，替换 secrets 后也会 rebuild 成员 harness；新增连续两次 key-only 更新的回归测试。
 - **测试稳定性**：pulse/scout 单测为每个 team 使用独立 memory/session 临时目录，消除并发测试共享默认 `agent-team-memory` 导致 SQLite 初始化竞态。
-- **验证**：`cargo test -p llm-harness-agent-team-studio` 通过 85 个单元测试 + 5 个集成测试；`cargo clippy -p llm-harness-agent-team-studio --all-targets -- -D warnings` 通过；`cargo fmt --check` 通过。
+- **验证**：`cargo test -p llm-harness-agent-team-studio` 通过 86 个单元测试 + 5 个集成测试；`cargo clippy -p llm-harness-agent-team-studio --all-targets -- -D warnings` 通过；`cargo fmt --check` 通过。
 - **下一步**：保持 `coding-team` 作为模板数据而非代码内角色，继续补 MCP toolkit、真实 LLM 稳定性、team 生命周期恢复与 UI 操作流验证。
