@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-30（`feat/agent-team-studio` review 收口：装配前校验 team id / member id 唯一性 / 保留 ID / handoff 目标；团队目录改为装配成功后创建，阻止持久化 spec 触发目录逃逸；成员 live-update 前校验 toolkit；成员密钥写入移到 project/agent 校验之后且不再落 team.json；key-only 变更也触发 rebuild；隔离测试团队 memory/session 临时目录。studio 88 单元 + 5 集成测试通过，clippy 与 fmt 通过。）
+> 最后更新：2026-08-30（`feat/agent-team-studio` 新增模板升级执行：创建时保存 template baseline，升级时仅更新未覆写成员、保留用户改动、重建结构性变更成员并刷新 handoff / patrol；同时保留装配校验、目录逃逸防护、成员 toolkit/key live-update 修复。studio 92 单元 + 5 集成测试通过，clippy 与 fmt 通过。）
 
 ---
 
@@ -832,7 +832,7 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-08-30 agent-team-studio 初步收尾
 
-**仓库**：`llm-harness-runtime`，分支 `feat/agent-team-studio`（远端 `2882151`）。
+**仓库**：`llm-harness-runtime`，分支 `feat/agent-team-studio`（远端 `722774e`）。
 
 - **装配校验收口**：`TeamSpec` 现在在 assemble 前拒绝空/相对路径逃逸的 team id、重复 member id、空/路径逃逸/保留 member id，以及指向不存在成员的 `Handoff` 目标。团队 issues 目录改为装配成功后创建，避免启动恢复持久化 spec 时目录写到 `teams/` 之外；启动后 handoff 也不再静默失败。
 - **模板目录安全**：`TemplateStore` 拒绝包含路径分隔符、`.`、`..` 或 NUL 的模板 id；用户目录列表只接受目录名与模板 JSON 内 id 一致的模板，load 时也校验这一致性。
@@ -841,5 +841,8 @@ model_check_feedback → calibration_report 全部通过。
 - **成员密钥持久化安全**：member provider override 的明文 key 只在 rebuild 装配前注入临时副本，`team.json` / entry spec 仍保留空占位；回归测试确认 `team.json` 不包含明文。
 - **key-only 变更生效**：`update_member` 接收显式 `key_changed` 信号，即使 model/base_url/toolkit 没变，替换 secrets 后也会 rebuild 成员 harness；新增连续两次 key-only 更新的回归测试。
 - **测试稳定性**：pulse/scout 单测为每个 team 使用独立 memory/session 临时目录，消除并发测试共享默认 `agent-team-memory` 导致 SQLite 初始化竞态。
-- **验证**：`cargo test --lib -p llm-harness-agent-team-studio` 通过 88 个单元测试，`--test integration` 通过 5 个集成测试；`cargo clippy -p llm-harness-agent-team-studio --all-targets -- -D warnings` 通过；`cargo fmt --check` 通过。
+- **模板升级执行**：`TeamSpec` 新增创建时的 `template_baseline`；`POST /api/team/upgrade-apply` 会用 baseline 识别未被用户覆写的成员，仅升级这些成员，保留覆写结果，结构性差异触发 member rebuild，并同步 handoff 路由、patrol 行为和持久化 template version。成员集合变化当前显式拒绝，等待后续成员管理流程。
+- **模型引用往返修复**：`ModelRef` 反序列化只在命中 `strong/main/cheap` 时归为 tier，其余字符串保留 explicit 语义，避免持久化后误判为未知 tier。
+- **升级前置校验**：模板升级前整体校验成员 ID / handoff 目标 / toolkit，避免畸形模板造成部分成员已更新的状态。
+- **验证**：`cargo test --lib -p llm-harness-agent-team-studio` 通过 92 个单元测试，`--test integration` 通过 5 个集成测试；`cargo clippy -p llm-harness-agent-team-studio --all-targets -- -D warnings` 通过；`cargo fmt -p llm-harness-agent-team-studio` 通过。
 - **下一步**：保持 `coding-team` 作为模板数据而非代码内角色，继续补 MCP toolkit、真实 LLM 稳定性、team 生命周期恢复与 UI 操作流验证。
