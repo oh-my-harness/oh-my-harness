@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-30（`feat/agent-team-studio` 新增 MCP toolkit 装配：成员可声明 `mcp:<server>`，装配时从 data_dir/.mcp.json 加载配置、连接所需 server、注入 MCP 工具到对应成员 harness；同时保留模板升级执行、装配校验、目录逃逸防护。studio 97 单元 + 5 集成测试通过，clippy 与 fmt 通过。）
+> 最后更新：2026-08-30（`feat/agent-team-studio` MCP 生命周期修复：MCP manager 通过 RAII guard 绑定到 TeamEntry，Drop 时取消后台连接任务；lock 文件指向 data_dir 避免写入 CWD；错误信息带成员归属；连接后校验 ConnectionStatus。studio 97 单元 + 5 集成测试通过，clippy 与 fmt 通过。）
 
 ---
 
@@ -849,12 +849,13 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-08-30 agent-team-studio MCP toolkit 装配
 
-**仓库**：`llm-harness-runtime`，分支 `feat/agent-team-studio`（远端 `9e2463b`）。
+**仓库**：`llm-harness-runtime`，分支 `feat/agent-team-studio`（远端 `d56340e`）。
 
 - **MCP toolkit 声明**：成员 `toolkits` 现在支持 `mcp:<server>` 格式；`validate_toolkits` 校验 server 名非空且不含路径分隔符/NUL，其余字符串仍按原有 `fs/web/memory/knowledge` 校验。
 - **配置加载**：装配时从 `data_dir/.mcp.json` 加载 `McpConfigFile`（JSON，含 `mcpServers` 映射）；文件不存在或请求的 server 未配置时 fail fast 并返回 `McpServerNotConfigured`。
 - **MCP 装配**：`prepare_mcp_tools` 收集所有成员的 unique MCP server 名，创建 `McpManager` 调用 `discover_and_connect`，然后通过 `get_tools()` 按过滤出每个 server 的工具列表。`assemble` 的 `IndividualSpec::configure` 闭包将匹配的 MCP 工具（`McpStudioTool` 适配器）注入对应成员的 harness builder。
 - **工具适配器**：studio 内部实现 `McpStudioTool` 实现 `Tool` trait，通过共享 `McpManager.call_tool()` 路由执行，支持 text content 和 structured_content 输出；失败时返回 `ToolFailure`。
 - **测试**：6 项新测试覆盖 server 名校验（有效/空/路径逃逸）、配置缺失报错、server 未在配置文件中报错、server 名去重。
+- **MCP 生命周期修复**：`McpManagerLifecycle` RAII guard 存入 `TeamEntry`，Drop 时调用 `cancel_background_tasks()` 终止连接/重连任务，防止 team rebuild 或 shutdown 时 MCP 连接泄漏。lock 文件从 CWD 相对路径改为 `data_dir/.mcp-lock.json`。`McpServerNotConfigured` 错误现在携带请求该 server 的成员 ID。`discover_and_connect` 后逐一检查 `ConnectionStatus::Connected`，未连接的 server fail fast 返回 `McpConnection` 错误。
 - **验证**：`cargo test --lib -p llm-harness-agent-team-studio` 通过 97 个单元测试，`--test integration` 通过 5 个集成测试；`cargo clippy -p llm-harness-agent-team-studio --all-targets -- -D warnings` 通过；`cargo fmt -p llm-harness-agent-team-studio` 通过。
 - **下一步**：真实 LLM 稳定性验证、team 生命周期恢复、UI 操作流验证。
