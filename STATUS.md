@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-30（`feat/agent-team-studio` 新增模板升级执行：创建时保存 template baseline，升级时仅更新未覆写成员、保留用户改动、重建结构性变更成员并刷新 handoff / patrol；同时保留装配校验、目录逃逸防护、成员 toolkit/key live-update 修复。studio 92 单元 + 5 集成测试通过，clippy 与 fmt 通过。）
+> 最后更新：2026-08-30（`feat/agent-team-studio` 新增 MCP toolkit 装配：成员可声明 `mcp:<server>`，装配时从 data_dir/.mcp.json 加载配置、连接所需 server、注入 MCP 工具到对应成员 harness；同时保留模板升级执行、装配校验、目录逃逸防护。studio 97 单元 + 5 集成测试通过，clippy 与 fmt 通过。）
 
 ---
 
@@ -846,3 +846,15 @@ model_check_feedback → calibration_report 全部通过。
 - **升级前置校验**：模板升级前整体校验成员 ID / handoff 目标 / toolkit，避免畸形模板造成部分成员已更新的状态。
 - **验证**：`cargo test --lib -p llm-harness-agent-team-studio` 通过 92 个单元测试，`--test integration` 通过 5 个集成测试；`cargo clippy -p llm-harness-agent-team-studio --all-targets -- -D warnings` 通过；`cargo fmt -p llm-harness-agent-team-studio` 通过。
 - **下一步**：保持 `coding-team` 作为模板数据而非代码内角色，继续补 MCP toolkit、真实 LLM 稳定性、team 生命周期恢复与 UI 操作流验证。
+
+### 2026-08-30 agent-team-studio MCP toolkit 装配
+
+**仓库**：`llm-harness-runtime`，分支 `feat/agent-team-studio`（远端 `9e2463b`）。
+
+- **MCP toolkit 声明**：成员 `toolkits` 现在支持 `mcp:<server>` 格式；`validate_toolkits` 校验 server 名非空且不含路径分隔符/NUL，其余字符串仍按原有 `fs/web/memory/knowledge` 校验。
+- **配置加载**：装配时从 `data_dir/.mcp.json` 加载 `McpConfigFile`（JSON，含 `mcpServers` 映射）；文件不存在或请求的 server 未配置时 fail fast 并返回 `McpServerNotConfigured`。
+- **MCP 装配**：`prepare_mcp_tools` 收集所有成员的 unique MCP server 名，创建 `McpManager` 调用 `discover_and_connect`，然后通过 `get_tools()` 按过滤出每个 server 的工具列表。`assemble` 的 `IndividualSpec::configure` 闭包将匹配的 MCP 工具（`McpStudioTool` 适配器）注入对应成员的 harness builder。
+- **工具适配器**：studio 内部实现 `McpStudioTool` 实现 `Tool` trait，通过共享 `McpManager.call_tool()` 路由执行，支持 text content 和 structured_content 输出；失败时返回 `ToolFailure`。
+- **测试**：6 项新测试覆盖 server 名校验（有效/空/路径逃逸）、配置缺失报错、server 未在配置文件中报错、server 名去重。
+- **验证**：`cargo test --lib -p llm-harness-agent-team-studio` 通过 97 个单元测试，`--test integration` 通过 5 个集成测试；`cargo clippy -p llm-harness-agent-team-studio --all-targets -- -D warnings` 通过；`cargo fmt -p llm-harness-agent-team-studio` 通过。
+- **下一步**：真实 LLM 稳定性验证、team 生命周期恢复、UI 操作流验证。
