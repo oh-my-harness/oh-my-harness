@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` 闭环回归：新增 planner→coder→planner→judge→operator 跨成员接力测试，覆盖 delegate_task、task_id 回复、联系人自动建立和 operator 汇报。studio 97 单元 + 6 mock 集成测试通过，fmt/clippy 通过。此前本地 LLM 单成员 E2E 已通过，4.54s 收到 confirmed 回复。workspace mock 回归通过；`llm-harness-live-tests` 因默认 live provider 配置按 mock 口径排除。）
+> 最后更新：2026-08-31（`feat/agent-team-studio` review 闭环回归：新增 NEEDS_CHANGES 回流与 PASS 汇报全链路测试，发现并修复 studio 声明式成员缺少 reviewer→judge 直连联系人的问题。studio 7 个 mock 集成测试通过，fmt/clippy 通过。此前本地 LLM 单成员 E2E 已通过，4.54s 收到 confirmed 回复。workspace mock 回归通过；`llm-harness-live-tests` 因默认 live provider 配置按 mock 口径排除。）
 
 ---
 
@@ -829,6 +829,15 @@ model_check_feedback → calibration_report 全部通过。
 - **是否测过**：是，但仅用 mock。14 单元测试 + 22 workflow 测试全过（`MockLlmClient` + `ScriptedCriticRunner`）。唯一的真实 LLM 端到端测试 `codex_login_produces_audited_runtime_workflow_review` 带 `#[ignore]`（需本地 Codex login + live 请求），默认不跑。即：确定性逻辑有 mock 覆盖，真实模型 E2E 未跑。
 - **何时触发多 Agent**：不自动触发。它是一个 workflow review checkpoint——在 runtime `WorkflowEngine` 里把某个 step 的 executor 注册为 `MultiAgentReviewExecutor`，workflow 走到该 step 时才调用。Critic 以独立 LLM session（隔离上下文，只看产物快照 + rubric）审查 Doer 的产物，路由到 `pass` / `revise` / `escalate` / `abort`。需显式在 workflow 配置中接入，背后由 `runtime` feature 开关。
 - **结论**：多 Agent 目前是"可接线、有 mock 验证"的 checkpoint 机制，尚未在真实 LLM 下端到端验证过，也未接入任何生产 workflow。
+
+### 2026-08-31 agent-team-studio review 闭环联系人修复
+
+**仓库**：`llm-harness-runtime`，分支 `feat/agent-team-studio`（远端 `73d560c`）。
+
+- **问题**：`coding-team` 模板要求 reviewer 通过 `send_message("judge")` 直发审查结果，judge 再向 planner 回流 `NEEDS_CHANGES`；但核心 `AgentTeam::build` 只为成员预置 operator 联系人，delegate 建立的联系人只覆盖 planner↔reviewer。首个完整 review-loop 回归用例确认 reviewer→judge 会因联系人不足卡住。
+- **修复**：在 `agent-team-studio` 装配层为所有声明成员建立双向联系人；`max_contacts_per_agent` 提升为 `max(20, members.len())`，保留核心社交层的稀疏联系人语义不变。
+- **回归**：新增确定性 `coding_team_review_loop_returns_changes_and_passes`，覆盖 reviewer→judge、judge→planner（NEEDS_CHANGES）、planner→coder、coder→planner、planner→judge、judge→operator（PASS）。
+- **验证**：`cargo test -p llm-harness-agent-team-studio --test integration` 通过 7 个 mock 集成测试（1 个 live 测试按预期 ignored）；`cargo fmt --all -- --check` 通过；`cargo clippy -p llm-harness-agent-team-studio --all-targets -- -D warnings` 通过。
 
 ### 2026-08-30 agent-team-studio 初步收尾
 
