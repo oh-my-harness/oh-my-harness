@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` 新增 SQLite inbox journal：pending 消息入队前落盘、runner 成功后 ack、崩溃重启按 at-least-once 恢复；agent-team 159 项、studio 99 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
+> 最后更新：2026-08-31（`feat/agent-team-studio` SQLite inbox journal 已改为 fail-fast：journal 写失败时消息不入队并向上返回错误；agent-team 160 项与 9 项集成、studio 99 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
 
 ---
 
@@ -832,12 +832,13 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-08-31 agent-team durable inbox journal
 
-**仓库**：`llm-harness-runtime`，分支 `feat/agent-team-studio`（远端 `c6e19ce`）。
+**仓库**：`llm-harness-runtime`，分支 `feat/agent-team-studio`（远端 `377978a`）。
 
 - **崩溃恢复语义**：`InboxJournal` 使用 SQLite WAL 单表记录 pending message；`InboxStore::push` 先写 journal，runner 成功后才 `ack` 删除。失败、panic、steer 回滚和进程崩溃都不会删除 pending row，重启后按 at-least-once 恢复。
 - **生命周期切换**：studio 每个团队装配 `teams/<id>/inbox.sqlite3`；`TeamManager` shutdown/Drop 只停止 runner，pending rows 留在 journal 内。JSON 快照路径已移除，避免 SQLite 和 JSON 双源恢复造成重复。
 - **集成范围**：`TeamConfig` 支持可选 journal；`SocialContext` 在 build 前恢复 rows；`InboxMessage` 携带 journal row id，return/pulse 重新入队不会生成重复 row；被 timeout 判定为 late stale 的消息在 drain 过滤时 ack。
-- **验证**：`agent-team` 159/159；`agent-team-studio` 99/99（默认并行）；mock integration 7/7；fmt 和 clippy 通过。
+- **失败语义加固**：`InboxStore::push` 在 journal 写失败时不再把消息放入内存队列，而是 fail-fast 向上返回错误；`send_message`、broadcast、delegate 和 operator submit 会把失败显式暴露。timeout/self-reminder 未成功入队时不继续清理 timeout registry。studio pulse 重新入队失败时会把消息返回内存并标注错误。
+- **验证**：`agent-team` 160/160 单元 + 9/9 集成；`agent-team-studio` 99/99（默认并行）与 7/7 mock 集成；fmt 和 clippy 通过。
 - **待办**：为旧分支的 `inbox.json` 快照增加一次性迁移；为 operator drain 增加 UI 确认后的 ack；timer/delegation timeout 仍需重建。
 
 ### 2026-08-31 agent-team-studio inbox 快照恢复加固
