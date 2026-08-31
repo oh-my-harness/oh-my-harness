@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` inbox 快照改为 fsync 原子写，恢复成功后清除旧快照，并隔离测试 provider factory；studio 99 项并行单元 + 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
+> 最后更新：2026-08-31（`feat/agent-team-studio` 新增 SQLite inbox journal：pending 消息入队前落盘、runner 成功后 ack、崩溃重启按 at-least-once 恢复；agent-team 159 项、studio 99 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
 
 ---
 
@@ -829,6 +829,16 @@ model_check_feedback → calibration_report 全部通过。
 - **是否测过**：是，但仅用 mock。14 单元测试 + 22 workflow 测试全过（`MockLlmClient` + `ScriptedCriticRunner`）。唯一的真实 LLM 端到端测试 `codex_login_produces_audited_runtime_workflow_review` 带 `#[ignore]`（需本地 Codex login + live 请求），默认不跑。即：确定性逻辑有 mock 覆盖，真实模型 E2E 未跑。
 - **何时触发多 Agent**：不自动触发。它是一个 workflow review checkpoint——在 runtime `WorkflowEngine` 里把某个 step 的 executor 注册为 `MultiAgentReviewExecutor`，workflow 走到该 step 时才调用。Critic 以独立 LLM session（隔离上下文，只看产物快照 + rubric）审查 Doer 的产物，路由到 `pass` / `revise` / `escalate` / `abort`。需显式在 workflow 配置中接入，背后由 `runtime` feature 开关。
 - **结论**：多 Agent 目前是"可接线、有 mock 验证"的 checkpoint 机制，尚未在真实 LLM 下端到端验证过，也未接入任何生产 workflow。
+
+### 2026-08-31 agent-team durable inbox journal
+
+**仓库**：`llm-harness-runtime`，分支 `feat/agent-team-studio`（远端 `c6e19ce`）。
+
+- **崩溃恢复语义**：`InboxJournal` 使用 SQLite WAL 单表记录 pending message；`InboxStore::push` 先写 journal，runner 成功后才 `ack` 删除。失败、panic、steer 回滚和进程崩溃都不会删除 pending row，重启后按 at-least-once 恢复。
+- **生命周期切换**：studio 每个团队装配 `teams/<id>/inbox.sqlite3`；`TeamManager` shutdown/Drop 只停止 runner，pending rows 留在 journal 内。JSON 快照路径已移除，避免 SQLite 和 JSON 双源恢复造成重复。
+- **集成范围**：`TeamConfig` 支持可选 journal；`SocialContext` 在 build 前恢复 rows；`InboxMessage` 携带 journal row id，return/pulse 重新入队不会生成重复 row；被 timeout 判定为 late stale 的消息在 drain 过滤时 ack。
+- **验证**：`agent-team` 159/159；`agent-team-studio` 99/99（默认并行）；mock integration 7/7；fmt 和 clippy 通过。
+- **待办**：为旧分支的 `inbox.json` 快照增加一次性迁移；为 operator drain 增加 UI 确认后的 ack；timer/delegation timeout 仍需重建。
 
 ### 2026-08-31 agent-team-studio inbox 快照恢复加固
 
