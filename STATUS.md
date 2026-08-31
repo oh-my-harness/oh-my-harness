@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` 完成 clean-shutdown pending inbox 持久化/恢复，覆盖 issues、contacts、runner 和队列消息；agent-team 18 项 inbox 测试与 studio 99 项单元测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
+> 最后更新：2026-08-31（`feat/agent-team-studio` inbox 快照改为 fsync 原子写，恢复成功后清除旧快照，并隔离测试 provider factory；studio 99 项并行单元 + 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
 
 ---
 
@@ -829,6 +829,15 @@ model_check_feedback → calibration_report 全部通过。
 - **是否测过**：是，但仅用 mock。14 单元测试 + 22 workflow 测试全过（`MockLlmClient` + `ScriptedCriticRunner`）。唯一的真实 LLM 端到端测试 `codex_login_produces_audited_runtime_workflow_review` 带 `#[ignore]`（需本地 Codex login + live 请求），默认不跑。即：确定性逻辑有 mock 覆盖，真实模型 E2E 未跑。
 - **何时触发多 Agent**：不自动触发。它是一个 workflow review checkpoint——在 runtime `WorkflowEngine` 里把某个 step 的 executor 注册为 `MultiAgentReviewExecutor`，workflow 走到该 step 时才调用。Critic 以独立 LLM session（隔离上下文，只看产物快照 + rubric）审查 Doer 的产物，路由到 `pass` / `revise` / `escalate` / `abort`。需显式在 workflow 配置中接入，背后由 `runtime` feature 开关。
 - **结论**：多 Agent 目前是"可接线、有 mock 验证"的 checkpoint 机制，尚未在真实 LLM 下端到端验证过，也未接入任何生产 workflow。
+
+### 2026-08-31 agent-team-studio inbox 快照恢复加固
+
+**仓库**：`llm-harness-runtime`，分支 `feat/agent-team-studio`（远端 `ab915d2`）。
+
+- **恢复幂等性**：`TeamManager::create` 成功把旧 `inbox.json` 重新入队后立即删除快照，避免进程在恢复后崩溃时再次启动导致同一批消息重复投递。
+- **快照持久性**：shutdown 快照现在写入临时文件、`fsync` 文件、rename 覆盖目标，并 `fsync` 团队目录；避免半写快照或 rename 后目录项未落盘。
+- **测试隔离**：`env_cfg` 新增测试专用 scoped provider factory guard，tests 持有互斥锁期间覆盖全局工厂、结束后清除；team-manager 和 route 测试改为持有该 guard，消除并行测试互相覆盖 factory 导致的偶发 runner 断言失败。
+- **验证**：`cargo test -p llm-harness-agent-team-studio --lib` 通过 99/99（默认并行）；`--test integration` 通过 7/7（3 个 live 按预期 ignored）；fmt 和 clippy 通过。
 
 ### 2026-08-31 agent-team-studio clean-shutdown inbox 恢复
 
