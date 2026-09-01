@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` SQLite inbox journal 已改为 fail-fast：journal 写失败时消息不入队并向上返回错误；agent-team 160 项与 9 项集成、studio 99 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
+> 最后更新：2026-09-01（shell drain 两条路径已改为有界 head/tail 收集：命令期间持续排水防止子进程阻塞，超时/中止保留有界部分输出并报告丢弃字节数；`ShellOptions` 支持 per-command 上限，新增 `ShellTimeout` / `ShellAborted` 错误。fmt、clippy、全工作区测试和三平台 CI 通过，修复见 llm-harness-runtime MR #164。此前 `feat/agent-team-studio` SQLite inbox journal 已改为 fail-fast：journal 写失败时消息不入队并向上返回错误；agent-team 160 项与 9 项集成、studio 99 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
 
 ---
 
@@ -58,6 +58,7 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 - `TaskRunnerImpl::start()` 完整实现：真实 AgentHarness 驱动（MockLlmClient E2E）
 - 3 个 E2E 测试（smoke / multi-turn / tracing）
 - `llm-harness-core` 的 `HarnessHooks` 新增 `Clone` derive
+- Shell 输出排水路径已实现 host 侧有界收集：head/tail 保留、丢弃字节数、持续排水、超时/中止部分输出和 per-command `max_output_bytes` 配置（MR #164）
 
 **待做：**
 - coding-agent 临时实现迁移到 runtime（tools/settings/provider 选择逻辑）
