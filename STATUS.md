@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` SQLite inbox journal 已改为 fail-fast：journal 写失败时消息不入队并向上返回错误；agent-team 160 项与 9 项集成、studio 99 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
+> 最后更新：2026-09-01（agent-team operator inbox 已改为 EventBus 发布成功后显式 ack，并新增重启回归测试；studio 100 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
 
 ---
 
@@ -829,6 +829,17 @@ model_check_feedback → calibration_report 全部通过。
 - **是否测过**：是，但仅用 mock。14 单元测试 + 22 workflow 测试全过（`MockLlmClient` + `ScriptedCriticRunner`）。唯一的真实 LLM 端到端测试 `codex_login_produces_audited_runtime_workflow_review` 带 `#[ignore]`（需本地 Codex login + live 请求），默认不跑。即：确定性逻辑有 mock 覆盖，真实模型 E2E 未跑。
 - **何时触发多 Agent**：不自动触发。它是一个 workflow review checkpoint——在 runtime `WorkflowEngine` 里把某个 step 的 executor 注册为 `MultiAgentReviewExecutor`，workflow 走到该 step 时才调用。Critic 以独立 LLM session（隔离上下文，只看产物快照 + rubric）审查 Doer 的产物，路由到 `pass` / `revise` / `escalate` / `abort`。需显式在 workflow 配置中接入，背后由 `runtime` feature 开关。
 - **结论**：多 Agent 目前是"可接线、有 mock 验证"的 checkpoint 机制，尚未在真实 LLM 下端到端验证过，也未接入任何生产 workflow。
+
+### 2026-09-01 agent-team operator inbox 发布后 ack
+
+**仓库**：`llm-harness-runtime`，分支 `fix/operator-inbox-ack`（PR #157）。
+
+- **投递语义**：operator pump 先把 agent → operator 消息发布到 `EventBus`，再显式调用 `ack_inbox_messages`，形成 at-least-once 语义。崩溃若发生在发布前，journal row 保留并在重启后恢复；若发生在发布后、ack 前，可能重新投递一次。
+- **启动复用**：`agent-studio` 启动流程复用 `routes::spawn_operator_pump`，移除独立 operator pump 实现，保证 API 与 startup 的投递和 ack 语义一致。
+- **可观测辅助**：`InboxJournal::pending_count` 暴露下一次启动会恢复的 durable row 数量，供回归测试检查，不暴露 journal 私有恢复类型。
+- **回归测试**：新增 `operator_pump_acks_messages_after_publishing`，验证消息发布到 EventBus、journal pending 清零、shutdown/restart 后同一条消息不再恢复到 operator inbox。
+- **验证**：`llm-harness-agent-team-studio` 100/100 单元测试通过；mock integration 7/7 通过（3 个 live 按预期 ignored）；targeted `llm-harness-agent-team` inbox journal 测试通过；`cargo fmt --all -- --check` 和 targeted clippy（`-D warnings`）通过。
+- **下一步**：确认 operator UI 在消费后是否需要回发显式完成事件；继续补齐 timer/delegation timeout 的 durable 重建。
 
 ### 2026-08-31 agent-team durable inbox journal
 
