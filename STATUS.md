@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` SQLite inbox journal 已改为 fail-fast：journal 写失败时消息不入队并向上返回错误；agent-team 160 项与 9 项集成、studio 99 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
+> 最后更新：2026-09-01（workflow executor recovery 失败诊断现在保留 anyhow 完整因果链；returned error、Failed event 和持久化 task error 均包含外层上下文与底层原因。workflow 221 项单元测试与 clippy 通过，PR #162 待合并。此前 agent-team SQLite inbox journal 已改为 fail-fast：journal 写失败时消息不入队并向上返回错误。）
 
 ---
 
@@ -822,6 +822,15 @@ model_check_feedback → calibration_report 全部通过。
 - **P0 reset 取消安全**：`reset_lock` 改为 `Arc<tokio::sync::Mutex<()>>` 以支持 `lock_owned()`；`ResetLifecycleGuard::handoff()` 将 lifecycle 所有权转移给 blocking task（caller future drop 不再回滚到 Running）；新增 `Tainted` lifecycle 状态——部分清理错误/panic 时转 Resetting→Tainted（永久不可用），绝不回滚到 Running；`TaintOnDrop` guard 确保 panic 时也转入 Tainted。3 项阶段控制测试：清理中取消、I/O 错误、panic。
 - **P1/P0 ChildReaper ownership**：bounded `sync_channel(256)` + 4 worker 线程（一个 stuck child 不阻塞其他）；专用 `stuck_loop` 线程定期重检超时 child，handle 在 exit 确认前绝不丢弃；`reap()` 从 `TrySendError` 恢复 child 并委托 `reap_with_fallback`；`reap_with_fallback` 用 `Arc<Mutex<Option>>` 条件性 move handle 到 fallback 线程，spawn 失败则 inline reap。5 项测试：receiver 断开、队列满、stuck 隔离、reap_to_completion、fallback reap。
 - **验证**：bwrap 48 测试全过（`--include-ignored`）；sandbox-os 24 测试全过；workspace clippy 零警告；`cargo fmt --all -- --check` 通过。multi-agent pin bump 到 `925dfa7`，`cargo test --all-features` 52 通过 + clippy clean。
+
+### 2026-09-01 workflow recovery 错误链诊断
+
+**仓库**：`llm-harness-runtime`，分支 `fix/workflow-recovery-error-chain`（PR #162）。
+
+- **诊断保留**：`WorkflowError::ExecutorRecoveryFailed` 的 Display 改用 anyhow `{source:#}`，外层 context 和底层 cause 都进入 task failure 字符串，操作日志可以区分“有意清理”和“存储损坏/不可用”。
+- **语义不变**：recovery 失败仍然不可 retry，executor recovery 行为保持不变；仅在错误序列化到 `TaskError`、`WorkflowEvent::Failed` 和返回值的边界保留完整因果链。
+- **回归覆盖**：复现 outer context + inner cause；断言 returned error、`Failed` event 和持久化 task error 都包含两层信息，并继续验证 recovery 失败不触发 execute/retry。
+- **验证**：`cargo test -p llm-harness-workflow --lib` 221/221 通过；`cargo clippy -p llm-harness-workflow --all-targets -- -D warnings` 通过。
 
 ### 2026-07-29 llm-harness-multi-agent 调查：测试状态与触发条件
 
