@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` SQLite inbox journal 已改为 fail-fast：journal 写失败时消息不入队并向上返回错误；agent-team 160 项与 9 项集成、studio 99 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
+> 最后更新：2026-09-01（agent-team pending timer SQLite journal 已支持到期/未到期恢复与重启去重；shutdown 现在会清理全部跟踪到的 timer 及 durable row，恢复 timer 会重新登记；Pulse 暴露并展示 pending timer 数量；Studio 支持显式重启并保留 pending timer。agent-team 166 项与 9 项集成、studio 102 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
 
 ---
 
@@ -829,6 +829,17 @@ model_check_feedback → calibration_report 全部通过。
 - **是否测过**：是，但仅用 mock。14 单元测试 + 22 workflow 测试全过（`MockLlmClient` + `ScriptedCriticRunner`）。唯一的真实 LLM 端到端测试 `codex_login_produces_audited_runtime_workflow_review` 带 `#[ignore]`（需本地 Codex login + live 请求），默认不跑。即：确定性逻辑有 mock 覆盖，真实模型 E2E 未跑。
 - **何时触发多 Agent**：不自动触发。它是一个 workflow review checkpoint——在 runtime `WorkflowEngine` 里把某个 step 的 executor 注册为 `MultiAgentReviewExecutor`，workflow 走到该 step 时才调用。Critic 以独立 LLM session（隔离上下文，只看产物快照 + rubric）审查 Doer 的产物，路由到 `pass` / `revise` / `escalate` / `abort`。需显式在 workflow 配置中接入，背后由 `runtime` feature 开关。
 - **结论**：多 Agent 目前是"可接线、有 mock 验证"的 checkpoint 机制，尚未在真实 LLM 下端到端验证过，也未接入任何生产 workflow。
+
+### 2026-09-01 agent-team durable timer shutdown/restart
+
+**仓库**：`llm-harness-runtime`，MR `#159`（分支 `fix/agent-team-timer-shutdown`，head `6eb42e8`）。
+
+- **shutdown 语义**：self-reminder 和 keyless timeout 也会登记到 `TimeoutRegistry`；`TeamManager` clean shutdown 除 abort task 外，还会同步删除对应 pending timer row，避免停止后仍投递或重启时重复恢复。
+- **restart 语义**：`SocialContext.with_journal` 恢复 timer 后重新登记 correlation key；若通知已写入 inbox journal，则清掉 timer row 并跳过重复 restore。
+- **工具失败语义**：delegate/broadcast/set_reminder 使用 durable API；timer journal 写入失败时返回 `timer_journal_persistence_failed`，不再静默丢失。
+- **可观测性**：Pulse 新增 `timers.pending`，Studio 动态面板展示“活跃定时器”数量。
+- **重启生命周期**：新增 `POST /api/team/projects/restart?id=...` 和 Studio“重启”按钮；重建前捕获并重写 pending timer row，确保显式重启不丢失定时任务。
+- **验证**：`agent-team` 166/166 单元 + 9/9 集成；`agent-team-studio` 102/102 单元 + 7/7 mock 集成；fmt 和 clippy 通过。
 
 ### 2026-08-31 agent-team durable inbox journal
 
