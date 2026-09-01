@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-01（agent-team pending timer SQLite journal 已支持到期/未到期恢复与重启去重；shutdown 现在会清理全部跟踪到的 timer 及 durable row，恢复 timer 会重新登记；Pulse 暴露并展示 pending timer 数量；Studio 支持显式重启并保留 pending timer。agent-team 166 项与 9 项集成、studio 102 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
+> 最后更新：2026-09-01（agent-team pending timer SQLite journal 已支持到期/未到期恢复与重启去重；shutdown 现在会清理全部跟踪到的 timer 及 durable row，恢复 timer 会重新登记；Pulse 暴露并展示 pending timer 数量；Studio 支持显式重启并保留 pending timer，同时按项目跟踪并取消旧 operator pump，避免重启后悬空 pump 消费或发布重复事件。agent-team 166 项与 9 项集成、studio 104 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
 
 ---
 
@@ -840,6 +840,15 @@ model_check_feedback → calibration_report 全部通过。
 - **可观测性**：Pulse 新增 `timers.pending`，Studio 动态面板展示“活跃定时器”数量。
 - **重启生命周期**：新增 `POST /api/team/projects/restart?id=...` 和 Studio“重启”按钮；重建前捕获并重写 pending timer row，确保显式重启不丢失定时任务。
 - **验证**：`agent-team` 166/166 单元 + 9/9 集成；`agent-team-studio` 102/102 单元 + 7/7 mock 集成；fmt 和 clippy 通过。
+
+### 2026-09-01 agent-team restart pump lifecycle
+
+**仓库**：`llm-harness-runtime`，MR `#160`（分支 `feat/agent-team-restart-recovery`，head `22b5e3a`）。
+
+- **重启恢复**：显式重启保留 pending inbox 与 timer；通过回归测试覆盖 pending state 和 timer journal 恢复。
+- **Pump 生命周期**：Studio 按项目 id 跟踪 live operator pump；项目删除或重启时取消旧 pump，注册新 pump 时原子替换旧句柄。
+- **事件一致性**：旧 `SocialContext` 绑定的 operator pump 不再在重启后继续 drain 或发布事件，避免悬空任务造成重复投递。
+- **验证**：`agent-team` 166/166 单元 + 9/9 集成；`agent-team-studio` 104/104 单元 + 7/7 mock 集成；fmt 和 clippy 通过。
 
 ### 2026-08-31 agent-team durable inbox journal
 
