@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` SQLite inbox journal 已改为 fail-fast：journal 写失败时消息不入队并向上返回错误；agent-team 160 项与 9 项集成、studio 99 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
+> 最后更新：2026-09-01（runtime strategy 层新增 observation shielding：按 assistant turn 保留窗口改写下一次模型可见的旧 ToolResult，保留 ToolUse，会话原始记录不变。strategy 328 项测试、专项 5 项测试与 clippy 通过，PR #161 待合并。）
 
 ---
 
@@ -822,6 +822,15 @@ model_check_feedback → calibration_report 全部通过。
 - **P0 reset 取消安全**：`reset_lock` 改为 `Arc<tokio::sync::Mutex<()>>` 以支持 `lock_owned()`；`ResetLifecycleGuard::handoff()` 将 lifecycle 所有权转移给 blocking task（caller future drop 不再回滚到 Running）；新增 `Tainted` lifecycle 状态——部分清理错误/panic 时转 Resetting→Tainted（永久不可用），绝不回滚到 Running；`TaintOnDrop` guard 确保 panic 时也转入 Tainted。3 项阶段控制测试：清理中取消、I/O 错误、panic。
 - **P1/P0 ChildReaper ownership**：bounded `sync_channel(256)` + 4 worker 线程（一个 stuck child 不阻塞其他）；专用 `stuck_loop` 线程定期重检超时 child，handle 在 exit 确认前绝不丢弃；`reap()` 从 `TrySendError` 恢复 child 并委托 `reap_with_fallback`；`reap_with_fallback` 用 `Arc<Mutex<Option>>` 条件性 move handle 到 fallback 线程，spawn 失败则 inline reap。5 项测试：receiver 断开、队列满、stuck 隔离、reap_to_completion、fallback reap。
 - **验证**：bwrap 48 测试全过（`--include-ignored`）；sandbox-os 24 测试全过；workspace clippy 零警告；`cargo fmt --all -- --check` 通过。multi-agent pin bump 到 `925dfa7`，`cargo test --all-features` 52 通过 + clippy clean。
+
+### 2026-09-01 runtime strategy 观察屏蔽
+
+**仓库**：`llm-harness-runtime`，分支 `feat/observation-shielding`（PR #161）。
+
+- **策略语义**：新增 `ObservationShieldingPlugin`，通过 `TransformContextHook` 在每次 LLM 调用前把超过 `retained_turns`（默认 5）的旧 `ToolResult` 替换为占位符；对应 `ToolUse` 保留可见，避免破坏工具调用轨迹。
+- **归组规则**：结果按发起调用的 assistant turn 归组；没有映射到 assistant turn 的导入/回放结果保持原样，采用 fail-open 兼容策略。
+- **边界**：只改写下一次模型可见上下文，不修改 session 原始记录；可与 compaction 共存，compaction 做整段摘要，shielding 做确定性的旧工具输出降噪。
+- **验证**：strategy crate 328 项测试全通过，其中 observation shielding 新增 5 项边界测试；`cargo clippy -p llm-harness-strategy --all-targets -- -D warnings` 通过；README 和 strategy guide 已同步。
 
 ### 2026-07-29 llm-harness-multi-agent 调查：测试状态与触发条件
 
