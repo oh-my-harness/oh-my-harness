@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` SQLite inbox journal 已改为 fail-fast：journal 写失败时消息不入队并向上返回错误；agent-team 160 项与 9 项集成、studio 99 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
+> 最后更新：2026-09-02（runtime 近期已完成 operator inbox 发布后 ack、restart pump 生命周期、durable timer journal/shutdown/restart、observation shielding、workflow recovery 错误链、agent-team memory-root 测试隔离和 bounded shell output；对应 MR #157-#164。当前 `#155`（tools deny reason + audit persistence）与 `#157` 仍待合并，且三平台 CI 均为绿。完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
 
 ---
 
@@ -58,6 +58,7 @@ coding-agent         ← coding agent 本体（对应 pi 的 packages/coding-age
 - `TaskRunnerImpl::start()` 完整实现：真实 AgentHarness 驱动（MockLlmClient E2E）
 - 3 个 E2E 测试（smoke / multi-turn / tracing）
 - `llm-harness-core` 的 `HarnessHooks` 新增 `Clone` derive
+- Shell 输出排水路径已实现 host 侧有界收集：head/tail 保留、丢弃字节数、持续排水、超时/中止部分输出和 per-command `max_output_bytes` 配置（MR #164）
 
 **待做：**
 - coding-agent 临时实现迁移到 runtime（tools/settings/provider 选择逻辑）
@@ -823,12 +824,30 @@ model_check_feedback → calibration_report 全部通过。
 - **P1/P0 ChildReaper ownership**：bounded `sync_channel(256)` + 4 worker 线程（一个 stuck child 不阻塞其他）；专用 `stuck_loop` 线程定期重检超时 child，handle 在 exit 确认前绝不丢弃；`reap()` 从 `TrySendError` 恢复 child 并委托 `reap_with_fallback`；`reap_with_fallback` 用 `Arc<Mutex<Option>>` 条件性 move handle 到 fallback 线程，spawn 失败则 inline reap。5 项测试：receiver 断开、队列满、stuck 隔离、reap_to_completion、fallback reap。
 - **验证**：bwrap 48 测试全过（`--include-ignored`）；sandbox-os 24 测试全过；workspace clippy 零警告；`cargo fmt --all -- --check` 通过。multi-agent pin bump 到 `925dfa7`，`cargo test --all-features` 52 通过 + clippy clean。
 
+### 2026-09-01 workflow recovery 错误链诊断
+
+**仓库**：`llm-harness-runtime`，分支 `fix/workflow-recovery-error-chain`（PR #162）。
+
+- **诊断保留**：`WorkflowError::ExecutorRecoveryFailed` 的 Display 改用 anyhow `{source:#}`，外层 context 和底层 cause 都进入 task failure 字符串，操作日志可以区分“有意清理”和“存储损坏/不可用”。
+- **语义不变**：recovery 失败仍然不可 retry，executor recovery 行为保持不变；仅在错误序列化到 `TaskError`、`WorkflowEvent::Failed` 和返回值的边界保留完整因果链。
+- **回归覆盖**：复现 outer context + inner cause；断言 returned error、`Failed` event 和持久化 task error 都包含两层信息，并继续验证 recovery 失败不触发 execute/retry。
+- **验证**：`cargo test -p llm-harness-workflow --lib` 221/221 通过；`cargo clippy -p llm-harness-workflow --all-targets -- -D warnings` 通过。
+
 ### 2026-07-29 llm-harness-multi-agent 调查：测试状态与触发条件
 
 - **仓库**：`oh-my-harness/llm-harness-multi-agent`，固定 runtime rev `1be6859`（fail-closed，#97 仍 open）。P0–P3 已完成，P4（生产资格验证）进行中。
 - **是否测过**：是，但仅用 mock。14 单元测试 + 22 workflow 测试全过（`MockLlmClient` + `ScriptedCriticRunner`）。唯一的真实 LLM 端到端测试 `codex_login_produces_audited_runtime_workflow_review` 带 `#[ignore]`（需本地 Codex login + live 请求），默认不跑。即：确定性逻辑有 mock 覆盖，真实模型 E2E 未跑。
 - **何时触发多 Agent**：不自动触发。它是一个 workflow review checkpoint——在 runtime `WorkflowEngine` 里把某个 step 的 executor 注册为 `MultiAgentReviewExecutor`，workflow 走到该 step 时才调用。Critic 以独立 LLM session（隔离上下文，只看产物快照 + rubric）审查 Doer 的产物，路由到 `pass` / `revise` / `escalate` / `abort`。需显式在 workflow 配置中接入，背后由 `runtime` feature 开关。
 - **结论**：多 Agent 目前是"可接线、有 mock 验证"的 checkpoint 机制，尚未在真实 LLM 下端到端验证过，也未接入任何生产 workflow。
+
+### 2026-09-01 agent-team memory-root test isolation
+
+**仓库**：`llm-harness-runtime`，MR `#163`（分支 `fix/agent-team-test-memory-isolation`，head `2adefaf`）。
+
+- **CI 稳定性**：构建团队的单元与集成测试改用独立 `memory_root`，避免并行测试共享默认 `agent-team-memory` 导致 SQLite 初始化竞争。
+- **回归依据**：CI 日志在 `build_failure_aborts_already_spawned_runners`、`full_message_flow_through_team` 和 `shutdown_cleans_pending_state` 中记录了 `team memory db: knowledge backend failed`。
+- **语义保持**：不构造团队、不触发 memory backend 的默认构造测试继续覆盖原 `TeamConfig::default()`。
+- **验证**：`agent-team` 165/165 单元 + 9/9 集成 + 1 个按预期忽略的 doc test；`cargo fmt --check`、agent-team `--all-targets --all-features` clippy 通过；MR `#163` 三平台 CI 全绿。
 
 ### 2026-08-31 agent-team durable inbox journal
 
