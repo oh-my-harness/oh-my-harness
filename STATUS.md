@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` SQLite inbox journal 已改为 fail-fast：journal 写失败时消息不入队并向上返回错误；agent-team 160 项与 9 项集成、studio 99 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
+> 最后更新：2026-09-02（runtime sandbox cgroup v2 限制已在 PR #165 提交：覆盖 CPU、进程、内存限额，控制器缺失与调用方取消路径均 fail closed；针对性 fmt/clippy/check/test 与 workspace check 通过，等待评审合并。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
 
 ---
 
@@ -916,3 +916,13 @@ model_check_feedback → calibration_report 全部通过。
 - **MCP 生命周期修复**：`McpManagerLifecycle` RAII guard 存入 `TeamEntry`，Drop 时调用 `cancel_background_tasks()` 终止连接/重连任务，防止 team rebuild 或 shutdown 时 MCP 连接泄漏。lock 文件从 CWD 相对路径改为 `data_dir/.mcp-lock.json`。`McpServerNotConfigured` 错误现在携带请求该 server 的成员 ID。`discover_and_connect` 后逐一检查 `ConnectionStatus::Connected`，未连接的 server fail fast 返回 `McpConnection` 错误。
 - **验证**：`cargo test --lib -p llm-harness-agent-team-studio` 通过 97 个单元测试，`--test integration` 通过 5 个集成测试；`cargo clippy -p llm-harness-agent-team-studio --all-targets -- -D warnings` 通过；`cargo fmt -p llm-harness-agent-team-studio` 通过。
 - **下一步**：真实 LLM 稳定性验证、team 生命周期恢复、UI 操作流验证。
+
+### 2026-09-02 bwrap cgroup v2 资源限制
+
+**仓库**：`llm-harness-runtime`，分支 `fix/bwrap-cgroup-v2-limits`（PR #165）。
+
+- `ResourceLimits` 新增 `max_processes`；bwrap 沙箱通过 cgroup v2 执行 `pids.max`、`memory.max` 和 `cpu.max` 限制。
+- cgroup 控制器或 subtree 控制能力缺失时拒绝创建沙箱，`max_disk_mb` 仍因缺少真实容量配额机制而拒绝。
+- 临时 cgroup 在命令正常结束、spawn 失败、生命周期拒绝和 execute_shell future 被取消/丢弃时清理；`CgroupV2` 增加 Drop 兜底，避免取消路径泄漏。
+- `execute_shell` 通过 shell 将 bwrap 进程写入 cgroup，子进程继承同一限额；集成测试覆盖 `pids.max=1` 的进程分叉拒绝。
+- 验证：`cargo fmt --all -- --check`、`cargo clippy -p llm-harness-sandbox --all-targets --all-features -- -D warnings`、`cargo check --workspace --all-features`、`cargo test -p llm-harness-sandbox --all-features` 通过。本地宿主为 cgroup v1，真实 cgroup v2 集成测试按前提跳过。
