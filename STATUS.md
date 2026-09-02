@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` SQLite inbox journal 已改为 fail-fast：journal 写失败时消息不入队并向上返回错误；agent-team 160 项与 9 项集成、studio 99 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
+> 最后更新：2026-09-02（runtime PR #165 提供 bwrap cgroup v2 CPU/进程/内存限额并通过三平台 CI；PR #166 增加 `request_human_approval` / `request_human_input` 内置 HITL 工具，复用 EventStream、request_id 匹配、无效响应 fail-closed 和超时降级。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
 
 ---
 
@@ -916,3 +916,14 @@ model_check_feedback → calibration_report 全部通过。
 - **MCP 生命周期修复**：`McpManagerLifecycle` RAII guard 存入 `TeamEntry`，Drop 时调用 `cancel_background_tasks()` 终止连接/重连任务，防止 team rebuild 或 shutdown 时 MCP 连接泄漏。lock 文件从 CWD 相对路径改为 `data_dir/.mcp-lock.json`。`McpServerNotConfigured` 错误现在携带请求该 server 的成员 ID。`discover_and_connect` 后逐一检查 `ConnectionStatus::Connected`，未连接的 server fail fast 返回 `McpConnection` 错误。
 - **验证**：`cargo test --lib -p llm-harness-agent-team-studio` 通过 97 个单元测试，`--test integration` 通过 5 个集成测试；`cargo clippy -p llm-harness-agent-team-studio --all-targets -- -D warnings` 通过；`cargo fmt -p llm-harness-agent-team-studio` 通过。
 - **下一步**：真实 LLM 稳定性验证、team 生命周期恢复、UI 操作流验证。
+
+### 2026-09-02 HITL 内置工具
+
+**仓库**：`llm-harness-runtime`，分支 `feat/human-interaction-tools`（PR #166）。
+
+- 新增 `request_human_approval` 与 `request_human_input` 内置工具；运行时保留这两个名字，防止业务工具覆盖。
+- 两个工具复用 `EventStream` 暂停/唤醒模型：应用层注入响应流，工具通过 `ToolExecutionUpdate` 发布带 `request_id` 的请求，收到匹配响应后继续 run。
+- 审批响应只接受 `approve` / `deny`；输入响应必须有 `value`。无效响应、响应流关闭和取消分别失败关闭或终止为 aborted。
+- 超时可配置：审批默认 Deny，可改为 Approve；输入默认可配置 JSON 值，避免无人响应时阻塞。
+- 覆盖测试：请求/响应匹配、跨请求忽略、无效响应 fail-closed、审批/输入超时降级、取消和响应流关闭。
+- 验证：`cargo fmt --all -- --check`、`cargo clippy -p llm-harness-workflow --all-targets --all-features -- -D warnings`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo test -p llm-harness-workflow --all-features`、`cargo check --workspace --all-features` 通过。全仓测试因 unrelated `llm-harness-live-tests` 依赖真实模型而卡住，未纳入本次结论。
