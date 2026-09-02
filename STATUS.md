@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` SQLite inbox journal 已改为 fail-fast：journal 写失败时消息不入队并向上返回错误；agent-team 160 项与 9 项集成、studio 99 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
+> 最后更新：2026-09-02（runtime issue #167 启动 agent-team-studio 桌面生产化；PR #168 完成 M1 第一阶段：per-process token、loopback Host/Origin 校验、WebSocket 强制鉴权和随机本机端口，三平台 CI 在无关 Windows flaky 修复 #170 合并后需 rerun。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
 
 ---
 
@@ -829,6 +829,15 @@ model_check_feedback → calibration_report 全部通过。
 - **是否测过**：是，但仅用 mock。14 单元测试 + 22 workflow 测试全过（`MockLlmClient` + `ScriptedCriticRunner`）。唯一的真实 LLM 端到端测试 `codex_login_produces_audited_runtime_workflow_review` 带 `#[ignore]`（需本地 Codex login + live 请求），默认不跑。即：确定性逻辑有 mock 覆盖，真实模型 E2E 未跑。
 - **何时触发多 Agent**：不自动触发。它是一个 workflow review checkpoint——在 runtime `WorkflowEngine` 里把某个 step 的 executor 注册为 `MultiAgentReviewExecutor`，workflow 走到该 step 时才调用。Critic 以独立 LLM session（隔离上下文，只看产物快照 + rubric）审查 Doer 的产物，路由到 `pass` / `revise` / `escalate` / `abort`。需显式在 workflow 配置中接入，背后由 `runtime` feature 开关。
 - **结论**：多 Agent 目前是"可接线、有 mock 验证"的 checkpoint 机制，尚未在真实 LLM 下端到端验证过，也未接入任何生产 workflow。
+
+### 2026-09-02 agent-team-studio desktop productionization M1
+
+**仓库**：`llm-harness-runtime`，跟踪 issue [#167](https://github.com/oh-my-harness/llm-harness-runtime/issues/167)，PR [#168](https://github.com/oh-my-harness/llm-harness-runtime/pull/168)。
+
+- **生产化边界**：Studio 启用 per-process UUIDv4 bearer token；Inspector 对 `/api/*` 统一校验 loopback `Host`、拒绝跨站 `Origin`，WebSocket 不再信任本地 `Origin`。静态资源保持可加载，状态和控制接口全部 fail-closed。
+- **服务启动**：未显式配置端口时默认绑定 ephemeral loopback port；launcher 等待真实监听地址，输出一次性 tokenized panel URL。UI 将 token 存入 `sessionStorage`、从可见 URL 移除，并用于 fetch/WebSocket。
+- **验证**：`cargo test -p llm-harness-inspector --features inspect` 21/21；`cargo test -p llm-harness-agent-team-studio --lib` 104/104；live process smoke 验证 401/200/静态 200。PR #168 首轮 CI 中 macOS/Linux 通过，Windows 失败定位为无关 subagent 测试竞态，修复 PR [#170](https://github.com/oh-my-harness/llm-harness-runtime/pull/170) 三平台 CI 全绿。
+- **下一步**：#168 在 #170 合并后 rebase/rerun；随后进入 M2 桌面宿主生命周期（single-instance、crash supervision、webview token injection、controlled shutdown）。
 
 ### 2026-08-31 agent-team durable inbox journal
 
