@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-08-31（`feat/agent-team-studio` SQLite inbox journal 已改为 fail-fast：journal 写失败时消息不入队并向上返回错误；agent-team 160 项与 9 项集成、studio 99 项单元与 7 项 mock 集成测试通过，fmt/clippy 通过。此前完整 11 成员 coding-team 本地 LLM E2E 已通过：220.11s，judge 收齐 5/5 reviewer 报告并独立验证 PASS。）
+> 最后更新：2026-09-04（runtime `main` head `d9e0fef`：桌面打包/文件访问加固 [#178](https://github.com/oh-my-harness/llm-harness-runtime/pull/178)、降级启动恢复 [#181](https://github.com/oh-my-harness/llm-harness-runtime/pull/181)、私有面板描述符与秘密写入加固 [#185](https://github.com/oh-my-harness/llm-harness-runtime/pull/185) 均已合入。结构化生命周期日志待审 PR [#186](https://github.com/oh-my-harness/llm-harness-runtime/pull/186)，Unix backend host supervisor 待审 PR [#187](https://github.com/oh-my-harness/llm-harness-runtime/pull/187)。issue [#167](https://github.com/oh-my-harness/llm-harness-runtime/issues/167) 已重新打开，剩余 M2/M4/M5。Agent Team 产品 UI 迁移到 `senza-studio` 已立项 issue [#1](https://github.com/oh-my-harness/senza-studio/issues/1)，Phase 1 contract PR [#2](https://github.com/oh-my-harness/senza-studio/pull/2) 待审。）
 
 ---
 
@@ -829,6 +829,69 @@ model_check_feedback → calibration_report 全部通过。
 - **是否测过**：是，但仅用 mock。14 单元测试 + 22 workflow 测试全过（`MockLlmClient` + `ScriptedCriticRunner`）。唯一的真实 LLM 端到端测试 `codex_login_produces_audited_runtime_workflow_review` 带 `#[ignore]`（需本地 Codex login + live 请求），默认不跑。即：确定性逻辑有 mock 覆盖，真实模型 E2E 未跑。
 - **何时触发多 Agent**：不自动触发。它是一个 workflow review checkpoint——在 runtime `WorkflowEngine` 里把某个 step 的 executor 注册为 `MultiAgentReviewExecutor`，workflow 走到该 step 时才调用。Critic 以独立 LLM session（隔离上下文，只看产物快照 + rubric）审查 Doer 的产物，路由到 `pass` / `revise` / `escalate` / `abort`。需显式在 workflow 配置中接入，背后由 `runtime` feature 开关。
 - **结论**：多 Agent 目前是"可接线、有 mock 验证"的 checkpoint 机制，尚未在真实 LLM 下端到端验证过，也未接入任何生产 workflow。
+
+### 2026-09-03 runtime PR 汇总与下一步
+
+**仓库**：`llm-harness-runtime`；`main` head `d9e0fef`。
+
+- **已合入**：[#170](https://github.com/oh-my-harness/llm-harness-runtime/pull/170)、[#155](https://github.com/oh-my-harness/llm-harness-runtime/pull/155)、[#157](https://github.com/oh-my-harness/llm-harness-runtime/pull/157)、[#165](https://github.com/oh-my-harness/llm-harness-runtime/pull/165)、[#166](https://github.com/oh-my-harness/llm-harness-runtime/pull/166)、[#177](https://github.com/oh-my-harness/llm-harness-runtime/pull/177)、[#181](https://github.com/oh-my-harness/llm-harness-runtime/pull/181)、[#185](https://github.com/oh-my-harness/llm-harness-runtime/pull/185)。
+- **Studio 生产化**：loopback + per-process API token、Inspector token 不落日志、`StudioRuntime` 可复用生命周期、workspace grants 目录访问边界、结构化 crash report（`<data-root>/logs/crash.jsonl`，0600）。
+- **运行时安全**：tools deny reason 保留并持久化到 audit；operator inbox 发布后 ack；bwrap cgroup v2 `pids.max` / `memory.max` / `cpu.max` 限制；human interaction tools。
+- **当前重点**：issue [#167](https://github.com/oh-my-harness/llm-harness-runtime/issues/167) 仍开放，剩余 M2/M4/M5——真实桌面宿主生命周期、安装/更新链路、原生文件/文件夹选择、窗口状态、通知、结构化日志与桌面 smoke test。
+- **下一步**：优先补桌面宿主进程生命周期与结构化日志/崩溃诊断，再进入打包和原生 UX；CI 需要 GitHub Actions 账务/额度恢复后 rerun。
+
+### 2026-09-03 agent-team-studio 降级启动恢复
+
+**仓库**：`llm-harness-runtime`，分支 `feat/studio-recovery-lifecycle`，PR [#179](https://github.com/oh-my-harness/llm-harness-runtime/pull/179)（stacked on [#178](https://github.com/oh-my-harness/llm-harness-runtime/pull/178)）。
+
+- **恢复语义**：`StudioRuntime::start` 逐个恢复持久化团队，并将无效 spec、未授权工作区、工作区检查失败、团队创建失败归类到 `StartupRecovery`。服务保持可用，但状态进入 `degraded`，不再静默丢弃失败团队。
+- **桌面可观测性**：新增 `GET /api/team/startup`；面板读取报告并显示“已恢复数量 / 持久化数量”和逐项失败原因，便于桌面宿主与操作员定位。
+- **单实例加固**：替换 `fd-lock` 依赖，将锁文件句柄和锁生命周期绑定到 `StudioRuntime`，运行结束或对象释放后锁释放。
+- **验证**：Studio 119 单测 + 7 mock 集成测试通过；workspace clippy 零警告；workspace 非 live 测试通过。恢复用例覆盖 healthy、invalid spec、未授权工作区和 API 输出。
+
+### 2026-09-04 agent-team-studio 私有启动协议与秘密写入
+
+**仓库**：`llm-harness-runtime`；PR [#185](https://github.com/oh-my-harness/llm-harness-runtime/pull/185) 已合入 `main`（commit `d9e0fef`）。
+
+**面板描述符协议**：
+- 后端 stdout 不再输出含 token 的 panel URL，只输出 `STUDIO_PANEL_DESCRIPTOR=<path>`；launcher 和未来桌面宿主从同目录 `panel.json` 本地读取 URL。
+- `panel.json` 使用 schema `llm-harness.studio.panel-descriptor.v1`，同目录临时文件 + rename 原子落盘，Unix 权限 0600；启动清理旧描述符，干净退出/Drop 时删除。
+- 二进制支持 SIGTERM 优雅停机；新增真实进程集成测试覆盖 descriptor schema、URL/token、0600 权限、stdout 不泄露 token、SIGTERM 清理和进程退出。
+
+**秘密文件写入**：
+- 全局/成员级 API key 和 workspace grant 持久化统一改为 `create_new` 唯一临时文件 + 原子 rename；Unix 下临时文件创建即为 0600，消除“先写后 chmod”的权限窗口和并发保存时的临时文件竞争。
+- 写失败时清理临时文件，路由显式返回 500，不再静默丢失 key；成员 secrets 路径组件在构造前再次拒绝空值、`.`、`..` 和路径分隔符。
+- 新增测试覆盖全局 key 原子替换、成员 key 私有保存、路径组件校验（含 Windows drive/ADS 冒号与 NUL）、临时文件清理和 rename 失败清理。
+
+**验证**：Studio 123 单测 + 8 mock 集成测试（3 live ignored）通过；仓库级 `cargo clippy --all-targets --all-features -- -D warnings` 通过；workspace 非 live 测试通过。
+
+### 2026-09-04 agent-team-studio 结构化生命周期日志
+
+**仓库**：`llm-harness-runtime`；PR [#186](https://github.com/oh-my-harness/llm-harness-runtime/pull/186) 待审。
+
+- **持久化协议**：新增 `llm-harness.studio.lifecycle-event.v1` JSONL 事件，写入 `<data-root>/logs/runtime.jsonl`；每条记录包含 schema、event id、微秒时间戳、进程 id、data root 和嵌套 data。写入 append + flush + `sync_all`，Unix 权限保持 0600。
+- **容量边界**：当前日志达到 1 MiB 后轮转，最多保留 10 个已轮转文件；crash report 复用同一套私有 JSONL writer、权限控制和轮转机制。
+- **运行时语义**：Studio 完全 ready 后记录 startup recovery（healthy/degraded、恢复数量、失败原因、绑定地址），干净 shutdown 后记录 shutdown；日志不写入 API token 或 panel URL。启动日志失败会关闭 runtime 并返回错误，团队关闭不因 shutdown 日志失败而中断。
+- **路径边界**：Unix 下日志文件使用 `O_NOFOLLOW`，并拒绝 logs 目录为符号链接，防止私有诊断流被重定向。
+- **验证**：Studio 127 单测 + 8 mock 集成测试（3 live ignored）通过；Studio clippy `--all-targets --all-features -D warnings` 通过；workspace 非 live 测试通过。
+
+### 2026-09-04 agent-team-studio Unix backend host supervisor
+
+**仓库**：`llm-harness-runtime`；PR [#187](https://github.com/oh-my-harness/llm-harness-runtime/pull/187) 待审。
+
+- **宿主能力**：新增 Unix `StudioBackendHost`，负责 spawn backend、等待 stdout 中的 panel descriptor 路径、验证 schema 和路径、暴露 ready backend 的 PID/descriptor，以及处理 backend 就绪前退出。
+- **进程边界**：backend 使用独立 process group，干净退出优先 SIGTERM 整组，超过 grace 后升级 SIGKILL；每个 data root 由 runtime singleton 拒绝重复实例，宿主测试覆盖 duplicate data root。
+- **启动安全**：宿主移除 provider 相关环境变量，仅注入 `STUDIO_DATA_ROOT` 和 `STUDIO_PORT`；panel descriptor 路径不匹配或 schema 不合法时 shutdown 并清理 stale descriptor。
+- **验证**：Studio 测试、Studio clippy、workspace 非 live 测试和 fmt 均通过。CI 三平台因 GitHub Actions 账务/额度问题未启动，非代码失败。
+
+### 2026-09-04 senza-studio AgentTeam UI 迁移立项
+
+**仓库**：`senza-studio`；issue [#1](https://github.com/oh-my-harness/senza-studio/issues/1)，PR [#2](https://github.com/oh-my-harness/senza-studio/pull/2) 待审。
+
+- **架构决策**：产品 UI、桌面 shell、导航和打包归 `senza-studio`；AgentTeam 编排、local API、认证、workspace grants、持久化和诊断继续归 `llm-harness-runtime`，避免 runtime 持续扩张产品 UI。
+- **Phase 1 contract**：PR #2 新增 `docs/agent-team-runtime-contract.md`，定义 descriptor/bearer token 边界、HTTP/WS API、错误语义、兼容策略和必需 contract tests；推荐 Senza Studio backend proxy，避免 runtime token 进入浏览器或日志。
+- **后续顺序**：先 review contract，再实现 backend proxy 与 contract tests，最后迁移 React AgentTeam 工作区和 Electron 生命周期；runtime `team.html` 在 parity 前仅保留为开发 fallback。
+- **验证**：`git diff --check` 通过；PR 保持单 commit / 单文件。
 
 ### 2026-08-31 agent-team durable inbox journal
 
