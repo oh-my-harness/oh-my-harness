@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-04（runtime `main` head `d9e0fef`：桌面打包/文件访问加固 [#178](https://github.com/oh-my-harness/llm-harness-runtime/pull/178)、降级启动恢复 [#181](https://github.com/oh-my-harness/llm-harness-runtime/pull/181)、私有面板描述符与秘密写入加固 [#185](https://github.com/oh-my-harness/llm-harness-runtime/pull/185) 均已合入。结构化生命周期日志待审 PR [#186](https://github.com/oh-my-harness/llm-harness-runtime/pull/186)，Unix backend host supervisor 待审 PR [#187](https://github.com/oh-my-harness/llm-harness-runtime/pull/187)。issue [#167](https://github.com/oh-my-harness/llm-harness-runtime/issues/167) 已重新打开，剩余 M2/M4/M5。Agent Team 产品 UI 迁移到 `senza-studio` 已立项 issue [#1](https://github.com/oh-my-harness/senza-studio/issues/1)，Phase 1 contract PR [#2](https://github.com/oh-my-harness/senza-studio/pull/2) 待审。）
+> 最后更新：2026-09-06（runtime `main` head `1aa9237`：桌面打包/文件访问加固 [#178](https://github.com/oh-my-harness/llm-harness-runtime/pull/178)、降级启动恢复 [#181](https://github.com/oh-my-harness/llm-harness-runtime/pull/181)、私有面板描述符与秘密写入加固 [#185](https://github.com/oh-my-harness/llm-harness-runtime/pull/185)、结构化生命周期日志 [#186](https://github.com/oh-my-harness/llm-harness-runtime/pull/186)、Unix backend host supervisor [#187](https://github.com/oh-my-harness/llm-harness-runtime/pull/187) 均已合入。issue [#167](https://github.com/oh-my-harness/llm-harness-runtime/issues/167) 已重新打开，剩余 M2/M4/M5。Agent Team 产品 UI 迁移到 `senza-studio` 已立项 issue [#1](https://github.com/oh-my-harness/senza-studio/issues/1)，Phase 1 contract PR [#2](https://github.com/oh-my-harness/senza-studio/pull/2) 已合入，backend proxy PR [#3](https://github.com/oh-my-harness/senza-studio/pull/3) 待审，local API auth 与 desktop host stacked 分支已推进到 `feat/studio-desktop-host`。）
 
 ---
 
@@ -892,6 +892,38 @@ model_check_feedback → calibration_report 全部通过。
 - **Phase 1 contract**：PR #2 新增 `docs/agent-team-runtime-contract.md`，定义 descriptor/bearer token 边界、HTTP/WS API、错误语义、兼容策略和必需 contract tests；推荐 Senza Studio backend proxy，避免 runtime token 进入浏览器或日志。
 - **后续顺序**：先 review contract，再实现 backend proxy 与 contract tests，最后迁移 React AgentTeam 工作区和 Electron 生命周期；runtime `team.html` 在 parity 前仅保留为开发 fallback。
 - **验证**：`git diff --check` 通过；PR 保持单 commit / 单文件。
+
+### 2026-09-05 senza-studio Agent Team backend proxy
+
+**仓库**：`senza-studio`；分支 `feat/agent-team-backend-proxy`（commit `e206882`，已推送到 fork，待开 PR）。
+
+- **集成边界**：Studio backend 挂载 `/api/team/{path}` 与 `/ws/team`，React 仅访问 Studio proxy；runtime descriptor、bearer token、编排、workspace、持久化和诊断继续留在 `llm-harness-runtime`。
+- **安全边界**：descriptor 使用 `O_NOFOLLOW` + regular-file + Unix 私有权限校验；仅允许 loopback HTTP upstream；拒绝 redirect、非安全 path、非法 Origin 和非法 bearer token 语法；HTTP/WS 响应做 token redaction；请求体和事件消息均有大小上限；WS 为只读事件流。
+- **生命周期**：FastAPI lifespan 复用 `httpx.AsyncClient`，禁用环境代理和 redirect；descriptor 通过 `SENZA_STUDIO_AGENT_TEAM_DESCRIPTOR` 配置，允许 Origin 通过 `SENZA_STUDIO_ALLOWED_ORIGINS` 配置且拒绝 `*`。
+- **验证**：`senza-studio` 全量 179 测试通过（含 16 个 proxy 单测和 1 个真实 runtime contract test）；真实 runtime 验证未认证 401、startup healthy、projects/templates、WS 握手和 token 不泄漏；`git diff --check` 通过。
+- **剩余缺口**：Studio backend 自身本地 API 认证、Electron 启动/停止 runtime 的完整生命周期、生产静态资源服务、跨平台打包策略、更完整 team CRUD/workspace/chat contract tests、pinned `senza-sdk 1.2.3` 验证和桌面 E2E smoke。
+
+### 2026-09-05 senza-studio 本地 API 认证
+
+**仓库**：`senza-studio`；stacked 分支 `feat/studio-local-api-auth`（commit `237cf3a`，基于 PR #3，已推送，暂不开 PR）。
+
+- **认证语义**：除 `/api/health` 与 `/auth/bootstrap` 外，所有 HTTP API 均要求认证；缺 token 启动 fail-closed，OpenAPI/docs 端点关闭。非浏览器客户端使用 Bearer token，浏览器/Electron 使用 `HttpOnly` + `SameSite=Strict` session cookie。
+- **WebSocket**：项目 WS 与 Agent Team 事件 WS 均支持 cookie、Bearer header 或 `senza-studio-bearer-<token>` 子协议；未认证连接以 1008 拒绝。
+- **配置与交付**：支持 `SENZA_STUDIO_API_TOKEN` 或私有 `SENZA_STUDIO_API_TOKEN_FILE`（Unix 0600、拒绝 symlink）；dev 脚本生成 256-bit token；Electron 生成/继承 token、等待健康检查、注入 cookie 并直接管理 Vite 进程。
+- **验证**：后端 189 测试通过；前端 `npm run build` 通过；`npm audit --omit=dev` 为 0 漏洞；`bash -n`、`node --check` 和 `git diff --check` 通过。Electron 桌面 E2E 仍未执行。
+- **剩余缺口**：同一 OS 用户恶意进程可读取 env/cookie 的更强威胁模型需要 OS sandbox/keyring，文档已明确边界；Electron runtime 生命周期与生产静态资源服务由 `feat/studio-desktop-host` 继续补齐。
+
+### 2026-09-06 senza-studio 桌面宿主生命周期
+
+**仓库**：`senza-studio`；stacked 分支 `feat/studio-desktop-host`（commit `327f9a2`，已推送到 fork，基于 PR #3 / local API auth，暂不开 PR）。
+
+- **Agent Team runtime 宿主**：Electron 启动真实 `agent-studio`，注入独立 data root 与 `STUDIO_PORT=0`，等待 stdout descriptor，校验路径、regular file 与 `llm-harness.studio.panel-descriptor.v1` schema 后才把 descriptor 传给 Python backend。
+- **监督与退出**：ready 后异常退出按 capped backoff 自动重启，快速连续失败达到上限后停止；稳定运行 30 秒重置失败计数。Unix 使用 process group SIGTERM/SIGKILL，Windows 使用 `taskkill /T /F` 兜底；退出后清理 stale descriptor。
+- **秘密边界**：runtime 环境移除 Studio API token、descriptor 和 provider 凭据；Electron/backend 输出统一 redact panel URL、query token 和 Studio API token，不读取或记录 runtime token。
+- **生产静态资源**：新增 `SENZA_STUDIO_STATIC_DIR`，只服务 regular file，拒绝 traversal、空段、控制字符和 symlink；仅 `/` fallback 到 `index.html`，Vite hash assets 使用 immutable cache。
+- **打包契约**：明确 packaged 资源必须位于 asar 外：`agent-studio`、Python backend、Python runtime 与 `studio_frontend/dist`；开发路径与 `SENZA_STUDIO_AGENT_TEAM_BIN` / `SENZA_STUDIO_PYTHON` 覆盖保留。
+- **验证**：Python 全量 194 测试通过；Electron runtime host 8 个 Vitest（含真实 runtime 启停）通过；`npm run build` 通过；`npm audit --omit=dev` 0 漏洞；`bash -n`、`node --check`、`git diff --check` 通过。
+- **剩余缺口**：Electron installer/打包 recipe、bundled Python、跨平台二进制、签名/公证、packaged E2E smoke 与桌面 UI 状态呈现仍未完成，因此桌面分发尚未达到生产级。
 
 ### 2026-08-31 agent-team durable inbox journal
 
