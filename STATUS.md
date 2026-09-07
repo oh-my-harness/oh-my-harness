@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-06（runtime `main` head `1aa9237`：桌面打包/文件访问加固 [#178](https://github.com/oh-my-harness/llm-harness-runtime/pull/178)、降级启动恢复 [#181](https://github.com/oh-my-harness/llm-harness-runtime/pull/181)、私有面板描述符与秘密写入加固 [#185](https://github.com/oh-my-harness/llm-harness-runtime/pull/185)、结构化生命周期日志 [#186](https://github.com/oh-my-harness/llm-harness-runtime/pull/186)、Unix backend host supervisor [#187](https://github.com/oh-my-harness/llm-harness-runtime/pull/187) 均已合入。issue [#167](https://github.com/oh-my-harness/llm-harness-runtime/issues/167) 已重新打开，剩余 M2/M4/M5。Agent Team 产品 UI 迁移到 `senza-studio` 已立项 issue [#1](https://github.com/oh-my-harness/senza-studio/issues/1)，Phase 1 contract PR [#2](https://github.com/oh-my-harness/senza-studio/pull/2) 已合入，backend proxy PR [#3](https://github.com/oh-my-harness/senza-studio/pull/3) 待审，local API auth 与 desktop host stacked 分支已推进到 `feat/studio-desktop-host`，独立 CI PR [#4](https://github.com/oh-my-harness/senza-studio/pull/4) 待审，Actions 启用问题见 issue [#5](https://github.com/oh-my-harness/senza-studio/issues/5)。）
+> 最后更新：2026-09-08（runtime `main` head `1aa9237`：桌面打包/文件访问加固 [#178](https://github.com/oh-my-harness/llm-harness-runtime/pull/178)、降级启动恢复 [#181](https://github.com/oh-my-harness/llm-harness-runtime/pull/181)、私有面板描述符与秘密写入加固 [#185](https://github.com/oh-my-harness/llm-harness-runtime/pull/185)、结构化生命周期日志 [#186](https://github.com/oh-my-harness/llm-harness-runtime/pull/186)、Unix backend host supervisor [#187](https://github.com/oh-my-harness/llm-harness-runtime/pull/187) 均已合入。issue [#167](https://github.com/oh-my-harness/llm-harness-runtime/issues/167) 已重新打开，剩余 M2/M4/M5。Agent Team 产品 UI 迁移到 `senza-studio` 已立项 issue [#1](https://github.com/oh-my-harness/senza-studio/issues/1)，Phase 1 contract PR [#2](https://github.com/oh-my-harness/senza-studio/pull/2) 已合入，backend proxy PR [#3](https://github.com/oh-my-harness/senza-studio/pull/3) 待审，local API auth 与 desktop host stacked 分支已推进到 `feat/studio-desktop-host`，独立 CI PR [#4](https://github.com/oh-my-harness/senza-studio/pull/4) 待审，Actions 启用问题见 issue [#5](https://github.com/oh-my-harness/senza-studio/issues/5)。）
 
 ---
 
@@ -146,6 +146,12 @@ rollback → finalize_round，best_cal=0.040，pipeline success。
 - `src/tools/` → runtime-tools crate
 - `src/settings.rs` → runtime SettingsManager
 - bin 中的 provider 选择逻辑 → runtime ModelRegistry
+
+### glm-5.3-coding-benchmarks ✅ DeepSWE v1.1 116 smoke 已打通
+- 2026-09-08 在 `smdpu01`（116）用 Hyperop `GLM-5.3` + rootless Docker 完成 DeepSWE v1.1 3-task smoke。
+- 固定 `seed=0`、并发 `2`、`temperature=0.95`、`top_p=1.0`；3/3 完成、0 error、aggregate reward `0.6667`。
+- 已产出每个任务的 trajectory、model patch、verifier reward/CTRF/test stdout；结果目录为 `/data/leiqiaojie/glm53-bench/runs-116-docker/2026-09-08__00-46-10`。
+- 已修复本地 CA mount 覆盖默认日志挂载、uv 下载网络抖动、secret 出现在 `docker compose exec` argv 三个工程问题。
 
 ---
 
