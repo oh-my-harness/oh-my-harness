@@ -155,7 +155,7 @@ rollback → finalize_round，best_cal=0.040，pipeline success。
 - 2026-09-08 验证：`/data` NFS 不能作为 rootless Docker data-root（镜像层 `lchown` 被拒）；`/dev/shm` 378G tmpfs 可用，1-task smoke reward `1`。
 - Full 113-task run 已在 `/dev/shm` 启动：并发 4、agent timeout 21600s、公开采样参数对齐；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-full`。
 - Full run 已实证 Hyperop `GLM-5.3` 实际上下文上限为 262,144 token，低于公开 DeepSWE footnote 的 400K；该结果只能作为 local execution variant，不能对标公开 `66.9`。
-- 已确认 8 个构建期 error 均为 GitHub 下载 `uv` 二进制间歇性失败；adapter 已补上安装脚本执行与 `uv` 下载超时重试。当前 full run 已加载旧代码，修复仅对后续 clean rerun 生效。
+- 已确认 9 个构建期 error 均为 GitHub 下载 `uv` 二进制间歇性失败；adapter 已补上安装脚本执行与 `uv` 下载超时重试。当前 full run 已加载旧代码，修复仅对后续 clean rerun 生效。
 - 已将 `uv 0.7.13` 固定为本地二进制（SHA256 `04e7399b45054f5ae4239ed60cd579311daafdd8d43e0e6ac01003436f19eaac`），后续 clean rerun 的 agent build 不再依赖 GitHub；run script 会记录 path/hash。
 
 ---
