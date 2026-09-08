@@ -156,7 +156,8 @@ rollback → finalize_round，best_cal=0.040，pipeline success。
 - Full 113-task run 曾在 `/dev/shm` 启动：并发 4、agent timeout 21600s、公开采样参数对齐；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-full`。
 - Full run 已实证 Hyperop `GLM-5.3` 实际上下文上限为 262,144 token，低于公开 DeepSWE footnote 的 400K；该结果只能作为 local execution variant，不能对标公开 `66.9`。
 - 2026-09-08 Hyperop 服务侧确认 256K 上限不能修改；已停止 DeepSWE full run。停止快照为 43 completed、25 errored、70 pending、4 cancelled，partial reward `0.2325581395`，无残留容器；在获得 400K endpoint 前不重启 strict full run。
-- 已确认 9 个构建期 error 均为 GitHub 下载 `uv` 二进制间歇性失败；adapter 已补上安装脚本执行与 `uv` 下载超时重试。当前 full run 已加载旧代码，修复仅对后续 clean rerun 生效。
+- 目标已调整为本地多模型选型：先完成 `GLM-5.3` 的 DeepSWE 256K local variant。已保留 18 个成功 trial 和 2 个 context 超限 trial，归档 19 个 uv 网络失败与 4 个 cancelled trial，并于 2026-09-08 22:15 用本地 `uv 0.7.13` 恢复同一 job；结果不宣称 strict public reproduction。
+- 已确认 19 个构建期 error 均为 GitHub 下载 `uv` 二进制间歇性失败；adapter 已补上安装脚本执行与 `uv` 下载超时重试。前次 full run 加载旧代码，恢复进程已加载修复后的 adapter。
 - 已将 `uv 0.7.13` 固定为本地二进制（SHA256 `04e7399b45054f5ae4239ed60cd579311daafdd8d43e0e6ac01003436f19eaac`），后续 clean rerun 的 agent build 不再依赖 GitHub；run script 会记录 path/hash。
 - 2026-09-08 已完成 1-task local-uv smoke：`helm-unified-manifest-stream` reward `1`，F2P `5/5`，P2P `2/2`，0 error；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-smoke-localuv/2026-09-08__18-25-43`。
 
