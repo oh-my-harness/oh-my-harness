@@ -147,11 +147,13 @@ rollback → finalize_round，best_cal=0.040，pipeline success。
 - `src/settings.rs` → runtime SettingsManager
 - bin 中的 provider 选择逻辑 → runtime ModelRegistry
 
-### glm-5.3-coding-benchmarks ✅ DeepSWE v1.1 116 smoke 已打通
+### glm-5.3-coding-benchmarks ✅ DeepSWE v1.1 116 smoke 已打通，full run 进行中
 - 2026-09-08 在 `smdpu01`（116）用 Hyperop `GLM-5.3` + rootless Docker 完成 DeepSWE v1.1 3-task smoke。
 - 固定 `seed=0`、并发 `2`、`temperature=0.95`、`top_p=1.0`；3/3 完成、0 error、aggregate reward `0.6667`。
 - 已产出每个任务的 trajectory、model patch、verifier reward/CTRF/test stdout；结果目录为 `/data/leiqiaojie/glm53-bench/runs-116-docker/2026-09-08__00-46-10`。
 - 已修复本地 CA mount 覆盖默认日志挂载、uv 下载网络抖动、secret 出现在 `docker compose exec` argv 三个工程问题。
+- 2026-09-08 验证：`/data` NFS 不能作为 rootless Docker data-root（镜像层 `lchown` 被拒）；`/dev/shm` 378G tmpfs 可用，1-task smoke reward `1`。
+- Full 113-task run 已在 `/dev/shm` 启动：并发 4、agent timeout 21600s、公开采样参数对齐；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-full`。
 
 ---
 
