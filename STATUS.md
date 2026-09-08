@@ -147,14 +147,15 @@ rollback → finalize_round，best_cal=0.040，pipeline success。
 - `src/settings.rs` → runtime SettingsManager
 - bin 中的 provider 选择逻辑 → runtime ModelRegistry
 
-### glm-5.3-coding-benchmarks ✅ DeepSWE v1.1 116 smoke 已打通，full run 进行中
+### glm-5.3-coding-benchmarks ⚠️ DeepSWE v1.1 local smoke 已打通，strict 400K 复现被 256K endpoint 阻断
 - 2026-09-08 在 `smdpu01`（116）用 Hyperop `GLM-5.3` + rootless Docker 完成 DeepSWE v1.1 3-task smoke。
 - 固定 `seed=0`、并发 `2`、`temperature=0.95`、`top_p=1.0`；3/3 完成、0 error、aggregate reward `0.6667`。
 - 已产出每个任务的 trajectory、model patch、verifier reward/CTRF/test stdout；结果目录为 `/data/leiqiaojie/glm53-bench/runs-116-docker/2026-09-08__00-46-10`。
 - 已修复本地 CA mount 覆盖默认日志挂载、uv 下载网络抖动、secret 出现在 `docker compose exec` argv 三个工程问题。
 - 2026-09-08 验证：`/data` NFS 不能作为 rootless Docker data-root（镜像层 `lchown` 被拒）；`/dev/shm` 378G tmpfs 可用，1-task smoke reward `1`。
-- Full 113-task run 已在 `/dev/shm` 启动：并发 4、agent timeout 21600s、公开采样参数对齐；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-full`。
+- Full 113-task run 曾在 `/dev/shm` 启动：并发 4、agent timeout 21600s、公开采样参数对齐；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-full`。
 - Full run 已实证 Hyperop `GLM-5.3` 实际上下文上限为 262,144 token，低于公开 DeepSWE footnote 的 400K；该结果只能作为 local execution variant，不能对标公开 `66.9`。
+- 2026-09-08 Hyperop 服务侧确认 256K 上限不能修改；已停止 DeepSWE full run。停止快照为 43 completed、25 errored、70 pending、4 cancelled，partial reward `0.2325581395`，无残留容器；在获得 400K endpoint 前不重启 strict full run。
 - 已确认 9 个构建期 error 均为 GitHub 下载 `uv` 二进制间歇性失败；adapter 已补上安装脚本执行与 `uv` 下载超时重试。当前 full run 已加载旧代码，修复仅对后续 clean rerun 生效。
 - 已将 `uv 0.7.13` 固定为本地二进制（SHA256 `04e7399b45054f5ae4239ed60cd579311daafdd8d43e0e6ac01003436f19eaac`），后续 clean rerun 的 agent build 不再依赖 GitHub；run script 会记录 path/hash。
 - 2026-09-08 已完成 1-task local-uv smoke：`helm-unified-manifest-stream` reward `1`，F2P `5/5`，P2P `2/2`，0 error；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-smoke-localuv/2026-09-08__18-25-43`。
