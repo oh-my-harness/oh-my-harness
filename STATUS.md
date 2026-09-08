@@ -157,6 +157,7 @@ rollback → finalize_round，best_cal=0.040，pipeline success。
 - Full run 已实证 Hyperop `GLM-5.3` 实际上下文上限为 262,144 token，低于公开 DeepSWE footnote 的 400K；该结果只能作为 local execution variant，不能对标公开 `66.9`。
 - 已确认 9 个构建期 error 均为 GitHub 下载 `uv` 二进制间歇性失败；adapter 已补上安装脚本执行与 `uv` 下载超时重试。当前 full run 已加载旧代码，修复仅对后续 clean rerun 生效。
 - 已将 `uv 0.7.13` 固定为本地二进制（SHA256 `04e7399b45054f5ae4239ed60cd579311daafdd8d43e0e6ac01003436f19eaac`），后续 clean rerun 的 agent build 不再依赖 GitHub；run script 会记录 path/hash。
+- 2026-09-08 已完成 1-task local-uv smoke：`helm-unified-manifest-stream` reward `1`，F2P `5/5`，P2P `2/2`，0 error；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-smoke-localuv/2026-09-08__18-25-43`。
 
 ---
 
