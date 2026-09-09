@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-08（runtime `main` head `1aa9237`：桌面打包/文件访问加固 [#178](https://github.com/oh-my-harness/llm-harness-runtime/pull/178)、降级启动恢复 [#181](https://github.com/oh-my-harness/llm-harness-runtime/pull/181)、私有面板描述符与秘密写入加固 [#185](https://github.com/oh-my-harness/llm-harness-runtime/pull/185)、结构化生命周期日志 [#186](https://github.com/oh-my-harness/llm-harness-runtime/pull/186)、Unix backend host supervisor [#187](https://github.com/oh-my-harness/llm-harness-runtime/pull/187) 均已合入。issue [#167](https://github.com/oh-my-harness/llm-harness-runtime/issues/167) 已重新打开，剩余 M2/M4/M5。Agent Team 产品 UI 迁移到 `senza-studio` 已立项 issue [#1](https://github.com/oh-my-harness/senza-studio/issues/1)，Phase 1 contract PR [#2](https://github.com/oh-my-harness/senza-studio/pull/2) 已合入，backend proxy PR [#3](https://github.com/oh-my-harness/senza-studio/pull/3) 待审，local API auth 与 desktop host stacked 分支已推进到 `feat/studio-desktop-host`，独立 CI PR [#4](https://github.com/oh-my-harness/senza-studio/pull/4) 待审，Actions 启用问题见 issue [#5](https://github.com/oh-my-harness/senza-studio/issues/5)。）
+> 最后更新：2026-09-09（runtime `main` head `1aa9237`：桌面打包/文件访问加固 [#178](https://github.com/oh-my-harness/llm-harness-runtime/pull/178)、降级启动恢复 [#181](https://github.com/oh-my-harness/llm-harness-runtime/pull/181)、私有面板描述符与秘密写入加固 [#185](https://github.com/oh-my-harness/llm-harness-runtime/pull/185)、结构化生命周期日志 [#186](https://github.com/oh-my-harness/llm-harness-runtime/pull/186)、Unix backend host supervisor [#187](https://github.com/oh-my-harness/llm-harness-runtime/pull/187) 均已合入。issue [#167](https://github.com/oh-my-harness/llm-harness-runtime/issues/167) 已重新打开，剩余 M2/M4/M5。Agent Team 产品 UI 迁移到 `senza-studio` 已立项 issue [#1](https://github.com/oh-my-harness/senza-studio/issues/1)，Phase 1 contract PR [#2](https://github.com/oh-my-harness/senza-studio/pull/2) 已合入，backend proxy PR [#3](https://github.com/oh-my-harness/senza-studio/pull/3) 待审，local API auth 与 desktop host stacked 分支已推进到 `feat/studio-desktop-host`，独立 CI PR [#4](https://github.com/oh-my-harness/senza-studio/pull/4) 待审，Actions 启用问题见 issue [#5](https://github.com/oh-my-harness/senza-studio/issues/5)。）
 
 ---
 
@@ -160,6 +160,9 @@ rollback → finalize_round，best_cal=0.040，pipeline success。
 - 已确认 19 个构建期 error 均为 GitHub 下载 `uv` 二进制间歇性失败；adapter 已补上安装脚本执行与 `uv` 下载超时重试。前次 full run 加载旧代码，恢复进程已加载修复后的 adapter。
 - 已将 `uv 0.7.13` 固定为本地二进制（SHA256 `04e7399b45054f5ae4239ed60cd579311daafdd8d43e0e6ac01003436f19eaac`），后续 clean rerun 的 agent build 不再依赖 GitHub；run script 会记录 path/hash。
 - 2026-09-08 已完成 1-task local-uv smoke：`helm-unified-manifest-stream` reward `1`，F2P `5/5`，P2P `2/2`，0 error；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-smoke-localuv/2026-09-08__18-25-43`。
+- 2026-09-09 `GLM-5.3` full run 结束：113 processed、34 errors、0 running、0 pending；其中 26 个为旧 key 失效导致的 API 403，7 个为 256K context 超限，1 个为环境启动超时。结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-full/2026-09-08__13-24-59`；该 aggregate reward 不能用于模型比较，需用有效 key 重跑 26 个 403 task。
+- 2026-09-09 已验证 Hyperop `GLM-5.3-Flash` API、rootless Docker、CA、egress proxy、本地 `uv 0.7.13`、mini-swe-agent 构建与评测链路。1-task smoke 因 smoke 专用 1h timeout 以 `AgentTimeoutError` 结束，但模型调用与环境链路已打通；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-smoke-flash-localuv/2026-09-09__14-01-36`。
+- 2026-09-09 15:45:59 已启动 `GLM-5.3-Flash` DeepSWE v1.1 full run：113 tasks、并发 4、temperature `0.95`、top_p `1.0`、agent timeout `21600s`、verifier timeout `1800s`；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-full-flash/2026-09-09__15-45-58`。
 
 ---
 
