@@ -167,6 +167,8 @@ rollback → finalize_round，best_cal=0.040，pipeline success。
 - 2026-09-09 已验证 Hyperop `GLM-5.3-Flash` API、rootless Docker、CA、egress proxy、本地 `uv 0.7.13`、mini-swe-agent 构建与评测链路。1-task smoke 因 smoke 专用 1h timeout 以 `AgentTimeoutError` 结束，但模型调用与环境链路已打通；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-smoke-flash-localuv/2026-09-09__14-01-36`。
 - 2026-09-09 15:45:59 已启动 `GLM-5.3-Flash` DeepSWE v1.1 full run：113 tasks、并发 4、temperature `0.95`、top_p `1.0`、agent timeout `21600s`、verifier timeout `1800s`；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-full-flash/2026-09-09__15-45-58`。
 - 2026-09-09 23:02 `GLM-5.3-Flash` full run 进度为 26 completed、0 errored、4 running、83 pending；与 `GLM-5.3` 并行使用独立 rootless Docker data root。
+- 2026-09-10 19:12 `GLM-5.3-Flash` DeepSWE full run 完成：113/113 completed、0 errored、0 running、0 pending、0 retries，aggregate reward `0.6548672566371682`，F2P `0.9215`，P2P `0.9993`；输入 token `2,916,626,652`，输出 token `12,298,915`。结果为 local protocol-aligned variant，不宣称官方复现。
+- 2026-09-10 23:53 再次恢复 `GLM-5.3` 原 job；Pier 已加载 `2026-09-08__13-24-59`，首批 4 个 pending 任务进入环境构建。此前 9 个 `NonZeroAgentExitCodeError` 均为 262,144-token context 超限，4 个 `CancelledError` 为手动停止；本次不重跑 context 超限任务。
 
 ---
 
