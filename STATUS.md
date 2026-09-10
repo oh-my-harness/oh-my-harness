@@ -163,6 +163,7 @@ rollback → finalize_round，best_cal=0.040，pipeline success。
 - 2026-09-09 `GLM-5.3` full run 结束：113 processed、34 errors、0 running、0 pending；其中 26 个为旧 key 失效导致的 API 403，7 个为 256K context 超限，1 个为环境启动超时。结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-full/2026-09-08__13-24-59`；该 aggregate reward 不能用于模型比较，需用有效 key 重跑 26 个 403 task。
 - 2026-09-09 22:36 已用有效 key resume `GLM-5.3` full run：归档 26 个旧 key 403 trial 与 1 个环境启动超时 trial，保留 86 个已有 trial，重跑 27 个无效 trial；继续使用 job `2026-09-08__13-24-59`。
 - 2026-09-09 23:10 验证 `GLM-5.3` resume 后首个 agent trial 已成功产生模型响应并执行工具调用，新 key 与 Hyperop API 链路有效；当前 4 running、23 pending，无新增 403。
+- 2026-09-10 09:44 因影响共用模型，停止 `GLM-5.3` resume run；停止时快照为 102 completed、13 errored、0 running、11 pending，partial reward `0.5294`，GLM Docker 容器清零。该分数仍不可作为最终分数使用。
 - 2026-09-09 已验证 Hyperop `GLM-5.3-Flash` API、rootless Docker、CA、egress proxy、本地 `uv 0.7.13`、mini-swe-agent 构建与评测链路。1-task smoke 因 smoke 专用 1h timeout 以 `AgentTimeoutError` 结束，但模型调用与环境链路已打通；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-smoke-flash-localuv/2026-09-09__14-01-36`。
 - 2026-09-09 15:45:59 已启动 `GLM-5.3-Flash` DeepSWE v1.1 full run：113 tasks、并发 4、temperature `0.95`、top_p `1.0`、agent timeout `21600s`、verifier timeout `1800s`；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-full-flash/2026-09-09__15-45-58`。
 - 2026-09-09 23:02 `GLM-5.3-Flash` full run 进度为 26 completed、0 errored、4 running、83 pending；与 `GLM-5.3` 并行使用独立 rootless Docker data root。
