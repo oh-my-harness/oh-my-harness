@@ -169,6 +169,7 @@ rollback → finalize_round，best_cal=0.040，pipeline success。
 - 2026-09-09 23:02 `GLM-5.3-Flash` full run 进度为 26 completed、0 errored、4 running、83 pending；与 `GLM-5.3` 并行使用独立 rootless Docker data root。
 - 2026-09-10 19:12 `GLM-5.3-Flash` DeepSWE full run 完成：113/113 completed、0 errored、0 running、0 pending、0 retries，aggregate reward `0.6548672566371682`，F2P `0.9215`，P2P `0.9993`；输入 token `2,916,626,652`，输出 token `12,298,915`。结果为 local protocol-aligned variant，不宣称官方复现。
 - 2026-09-10 23:53 再次恢复 `GLM-5.3` 原 job；Pier 已加载 `2026-09-08__13-24-59`，首批 4 个 pending 任务进入环境构建。此前 9 个 `NonZeroAgentExitCodeError` 均为 262,144-token context 超限，4 个 `CancelledError` 为手动停止；本次不重跑 context 超限任务。
+- 2026-09-11 03:40 `GLM-5.3` DeepSWE 256K local variant 完成：113/113 result files，aggregate reward `0.5486725663716814`；其中 62 个 reward `1`、47 个 reward `0`、4 个取消任务无 eval reward。13 errors 为 9 个 `NonZeroAgentExitCodeError`（全部 256K context 超限）加 4 个手动停止 `CancelledError`；0 retries。结果不能直接对标官方 400K strict run 的 `0.669`。
 
 ---
 
