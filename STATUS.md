@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-09（runtime `main` head `1aa9237`：桌面打包/文件访问加固 [#178](https://github.com/oh-my-harness/llm-harness-runtime/pull/178)、降级启动恢复 [#181](https://github.com/oh-my-harness/llm-harness-runtime/pull/181)、私有面板描述符与秘密写入加固 [#185](https://github.com/oh-my-harness/llm-harness-runtime/pull/185)、结构化生命周期日志 [#186](https://github.com/oh-my-harness/llm-harness-runtime/pull/186)、Unix backend host supervisor [#187](https://github.com/oh-my-harness/llm-harness-runtime/pull/187) 均已合入。issue [#167](https://github.com/oh-my-harness/llm-harness-runtime/issues/167) 已重新打开，剩余 M2/M4/M5。Agent Team 产品 UI 迁移到 `senza-studio` 已立项 issue [#1](https://github.com/oh-my-harness/senza-studio/issues/1)，Phase 1 contract PR [#2](https://github.com/oh-my-harness/senza-studio/pull/2) 已合入，backend proxy PR [#3](https://github.com/oh-my-harness/senza-studio/pull/3) 待审，local API auth 与 desktop host stacked 分支已推进到 `feat/studio-desktop-host`，独立 CI PR [#4](https://github.com/oh-my-harness/senza-studio/pull/4) 待审，Actions 启用问题见 issue [#5](https://github.com/oh-my-harness/senza-studio/issues/5)。）
+> 最后更新：2026-09-11（GLM-5.3 DeepSWE 4 个手动取消任务已在 116 重跑完成；strict 400K 仍受 Hyperop 256K endpoint 限制。）
 
 ---
 
@@ -170,6 +170,9 @@ rollback → finalize_round，best_cal=0.040，pipeline success。
 - 2026-09-10 19:12 `GLM-5.3-Flash` DeepSWE full run 完成：113/113 completed、0 errored、0 running、0 pending、0 retries，aggregate reward `0.6548672566371682`，F2P `0.9215`，P2P `0.9993`；输入 token `2,916,626,652`，输出 token `12,298,915`。结果为 local protocol-aligned variant，不宣称官方复现。
 - 2026-09-10 23:53 再次恢复 `GLM-5.3` 原 job；Pier 已加载 `2026-09-08__13-24-59`，首批 4 个 pending 任务进入环境构建。此前 9 个 `NonZeroAgentExitCodeError` 均为 262,144-token context 超限，4 个 `CancelledError` 为手动停止；本次不重跑 context 超限任务。
 - 2026-09-11 03:40 `GLM-5.3` DeepSWE 256K local variant 完成：113/113 result files，aggregate reward `0.5486725663716814`；其中 62 个 reward `1`、47 个 reward `0`、4 个取消任务无 eval reward。13 errors 为 9 个 `NonZeroAgentExitCodeError`（全部 256K context 超限）加 4 个手动停止 `CancelledError`；0 retries。结果不能直接对标官方 400K strict run 的 `0.669`。
+- 2026-09-11 13:01 4 个手动取消任务重跑完成：4/4 completed、0 error、0 retry，partial reward `0.9944`；`ytt-jsonpath-query-api`、`yjs-map-conflict-detection`、`bandit-incremental-cache-control` reward 均为 `1`，`prometheus-typed-label-sorting` reward 为 `0`（partial `0.9778`）。结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-glm53-cancelled4-attempt3/glm53-deepswe-cancelled4-attempt3-20260911`。
+- 用上述 4 个结果替换原 4 个 `CancelledError` 后，`GLM-5.3` 256K local variant 的 replacement-adjusted aggregate reward 为 `0.5752212389380531`（65/113）；9 个 256K context 超限任务保持 expected failures，仍不宣称 strict 400K 官方复现。
+- 结果对比图：`docs/glm-deepswe-results-20260911.svg`（官方 400K `0.669`、本地 GLM-5.3 `0.5752`、本地 GLM-5.3-Flash `0.6549`；图内已标注非同条件对照）。
 
 ---
 

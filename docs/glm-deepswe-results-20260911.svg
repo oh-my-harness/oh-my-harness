@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="560" viewBox="0 0 1280 560">
+  <rect width="1280" height="560" fill="#fff"/>
+  <style>
+    .title { font: 700 30px system-ui, sans-serif; fill: #111827; }
+    .subtitle { font: 400 16px system-ui, sans-serif; fill: #6b7280; }
+    .label { font: 600 17px system-ui, sans-serif; fill: #111827; }
+    .value { font: 700 22px system-ui, sans-serif; fill: #111827; }
+    .tick { font: 400 13px system-ui, sans-serif; fill: #6b7280; }
+    .note { font: 400 14px system-ui, sans-serif; fill: #4b5563; }
+    .grid { stroke: #e5e7eb; stroke-width: 1; }
+  </style>
+
+  <text x="60" y="58" class="title">DeepSWE v1.1 结果对比</text>
+  <text x="60" y="86" class="subtitle">GLM-5.3 / GLM-5.3-Flash · 2026-09-11</text>
+
+  <g>
+    <line x1="360" y1="110" x2="360" y2="390" stroke="#9ca3af" stroke-width="1"/>
+    <line x1="642" y1="110" x2="642" y2="390" stroke="#e5e7eb" stroke-width="1"/>
+    <line x1="924" y1="110" x2="924" y2="390" stroke="#e5e7eb" stroke-width="1"/>
+    <line x1="1206" y1="110" x2="1206" y2="390" stroke="#e5e7eb" stroke-width="1"/>
+    <text x="356" y="410" text-anchor="middle" class="tick">0</text>
+    <text x="638" y="410" text-anchor="middle" class="tick">0.25</text>
+    <text x="920" y="410" text-anchor="middle" class="tick">0.5</text>
+    <text x="1195" y="410" text-anchor="middle" class="tick">0.75</text>
+
+    <text x="340" y="158" text-anchor="end" class="label">官方 GLM-5.3（400K）</text>
+    <rect x="360" y="130" width="714" height="46" rx="8" fill="#2563eb"/>
+    <text x="1088" y="189" text-anchor="end" class="value" fill="#fff">0.669</text>
+
+    <text x="340" y="248" text-anchor="end" class="label">本地 GLM-5.3（256K）</text>
+    <rect x="360" y="220" width="614" height="46" rx="8" fill="#f59e0b"/>
+    <text x="986" y="279" text-anchor="end" class="value" fill="#fff">0.5752</text>
+
+    <text x="340" y="338" text-anchor="end" class="label">本地 GLM-5.3-Flash</text>
+    <rect x="360" y="310" width="700" height="46" rx="8" fill="#10b981"/>
+    <text x="1072" y="369" text-anchor="end" class="value" fill="#fff">0.6549</text>
+  </g>
+
+  <text x="60" y="462" class="note">• 官方 400K 与本地 256K 不是同条件结果；本地 GLM 分数使用 4 个手动取消任务重跑后的 replacement-adjusted aggregate。</text>
+  <text x="60" y="487" class="note">• GLM-5.3-Flash 目前没有公开 DeepSWE 官方对照分，数值仅用于本地协议对齐后的模型选型参考。</text>
+  <text x="60" y="488" class="note"/>
+</svg>
