@@ -172,7 +172,7 @@ rollback → finalize_round，best_cal=0.040，pipeline success。
 - 2026-09-11 03:40 `GLM-5.3` DeepSWE 256K local variant 完成：113/113 result files，aggregate reward `0.5486725663716814`；其中 62 个 reward `1`、47 个 reward `0`、4 个取消任务无 eval reward。13 errors 为 9 个 `NonZeroAgentExitCodeError`（全部 256K context 超限）加 4 个手动停止 `CancelledError`；0 retries。结果不能直接对标官方 400K strict run 的 `0.669`。
 - 2026-09-11 13:01 4 个手动取消任务重跑完成：4/4 completed、0 error、0 retry，partial reward `0.9944`；`ytt-jsonpath-query-api`、`yjs-map-conflict-detection`、`bandit-incremental-cache-control` reward 均为 `1`，`prometheus-typed-label-sorting` reward 为 `0`（partial `0.9778`）。结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-glm53-cancelled4-attempt3/glm53-deepswe-cancelled4-attempt3-20260911`。
 - 用上述 4 个结果替换原 4 个 `CancelledError` 后，`GLM-5.3` 256K local variant 的 replacement-adjusted aggregate reward 为 `0.5752212389380531`（65/113）；9 个 256K context 超限任务保持 expected failures，仍不宣称 strict 400K 官方复现。
-- 结果对比图：`docs/glm-deepswe-results-20260911.svg`（官方 400K `0.669`、本地 GLM-5.3 `0.5752`、本地 GLM-5.3-Flash `0.6549`；图内已标注非同条件对照）。
+- 结果对比图与说明：`glm-5.3-coding-benchmarks/docs/deepswe-local-results-20260911.md`（官方 400K `0.669`、本地 GLM-5.3 `0.5752`、本地 GLM-5.3-Flash `0.6549`；图内已标注 9/113 个 256K context-overflow 任务和非同条件对照）。
 
 ---
 
