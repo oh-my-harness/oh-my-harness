@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-04（runtime `main` head `d9e0fef`：桌面打包/文件访问加固 [#178](https://github.com/oh-my-harness/llm-harness-runtime/pull/178)、降级启动恢复 [#181](https://github.com/oh-my-harness/llm-harness-runtime/pull/181)、私有面板描述符与秘密写入加固 [#185](https://github.com/oh-my-harness/llm-harness-runtime/pull/185) 均已合入。结构化生命周期日志待审 PR [#186](https://github.com/oh-my-harness/llm-harness-runtime/pull/186)，Unix backend host supervisor 待审 PR [#187](https://github.com/oh-my-harness/llm-harness-runtime/pull/187)。issue [#167](https://github.com/oh-my-harness/llm-harness-runtime/issues/167) 已重新打开，剩余 M2/M4/M5。Agent Team 产品 UI 迁移到 `senza-studio` 已立项 issue [#1](https://github.com/oh-my-harness/senza-studio/issues/1)，Phase 1 contract PR [#2](https://github.com/oh-my-harness/senza-studio/pull/2) 待审。）
+> 最后更新：2026-09-11（GLM-5.3 DeepSWE 4 个手动取消任务已在 116 重跑完成；strict 400K 仍受 Hyperop 256K endpoint 限制。）
 
 ---
 
@@ -146,6 +146,33 @@ rollback → finalize_round，best_cal=0.040，pipeline success。
 - `src/tools/` → runtime-tools crate
 - `src/settings.rs` → runtime SettingsManager
 - bin 中的 provider 选择逻辑 → runtime ModelRegistry
+
+### glm-5.3-coding-benchmarks ⚠️ DeepSWE v1.1 local smoke 已打通，strict 400K 复现被 256K endpoint 阻断
+- 2026-09-08 在 `smdpu01`（116）用 Hyperop `GLM-5.3` + rootless Docker 完成 DeepSWE v1.1 3-task smoke。
+- 固定 `seed=0`、并发 `2`、`temperature=0.95`、`top_p=1.0`；3/3 完成、0 error、aggregate reward `0.6667`。
+- 已产出每个任务的 trajectory、model patch、verifier reward/CTRF/test stdout；结果目录为 `/data/leiqiaojie/glm53-bench/runs-116-docker/2026-09-08__00-46-10`。
+- 已修复本地 CA mount 覆盖默认日志挂载、uv 下载网络抖动、secret 出现在 `docker compose exec` argv 三个工程问题。
+- 2026-09-08 验证：`/data` NFS 不能作为 rootless Docker data-root（镜像层 `lchown` 被拒）；`/dev/shm` 378G tmpfs 可用，1-task smoke reward `1`。
+- Full 113-task run 曾在 `/dev/shm` 启动：并发 4、agent timeout 21600s、公开采样参数对齐；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-full`。
+- Full run 已实证 Hyperop `GLM-5.3` 实际上下文上限为 262,144 token，低于公开 DeepSWE footnote 的 400K；该结果只能作为 local execution variant，不能对标公开 `66.9`。
+- 2026-09-08 Hyperop 服务侧确认 256K 上限不能修改；已停止 DeepSWE full run。停止快照为 43 completed、25 errored、70 pending、4 cancelled，partial reward `0.2325581395`，无残留容器；在获得 400K endpoint 前不重启 strict full run。
+- 目标已调整为本地多模型选型：先完成 `GLM-5.3` 的 DeepSWE 256K local variant。已保留 18 个成功 trial 和 2 个 context 超限 trial，归档 19 个 uv 网络失败与 4 个 cancelled trial，并于 2026-09-08 22:15 用本地 `uv 0.7.13` 恢复同一 job；结果不宣称 strict public reproduction。
+- 已确认 19 个构建期 error 均为 GitHub 下载 `uv` 二进制间歇性失败；adapter 已补上安装脚本执行与 `uv` 下载超时重试。前次 full run 加载旧代码，恢复进程已加载修复后的 adapter。
+- 已将 `uv 0.7.13` 固定为本地二进制（SHA256 `04e7399b45054f5ae4239ed60cd579311daafdd8d43e0e6ac01003436f19eaac`），后续 clean rerun 的 agent build 不再依赖 GitHub；run script 会记录 path/hash。
+- 2026-09-08 已完成 1-task local-uv smoke：`helm-unified-manifest-stream` reward `1`，F2P `5/5`，P2P `2/2`，0 error；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-smoke-localuv/2026-09-08__18-25-43`。
+- 2026-09-09 `GLM-5.3` full run 结束：113 processed、34 errors、0 running、0 pending；其中 26 个为旧 key 失效导致的 API 403，7 个为 256K context 超限，1 个为环境启动超时。结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-full/2026-09-08__13-24-59`；该 aggregate reward 不能用于模型比较，需用有效 key 重跑 26 个 403 task。
+- 2026-09-09 22:36 已用有效 key resume `GLM-5.3` full run：归档 26 个旧 key 403 trial 与 1 个环境启动超时 trial，保留 86 个已有 trial，重跑 27 个无效 trial；继续使用 job `2026-09-08__13-24-59`。
+- 2026-09-09 23:10 验证 `GLM-5.3` resume 后首个 agent trial 已成功产生模型响应并执行工具调用，新 key 与 Hyperop API 链路有效；当前 4 running、23 pending，无新增 403。
+- 2026-09-10 09:44 因影响共用模型，停止 `GLM-5.3` resume run；停止时快照为 102 completed、13 errored、0 running、11 pending，partial reward `0.5294`，GLM Docker 容器清零。该分数仍不可作为最终分数使用。
+- 2026-09-09 已验证 Hyperop `GLM-5.3-Flash` API、rootless Docker、CA、egress proxy、本地 `uv 0.7.13`、mini-swe-agent 构建与评测链路。1-task smoke 因 smoke 专用 1h timeout 以 `AgentTimeoutError` 结束，但模型调用与环境链路已打通；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-smoke-flash-localuv/2026-09-09__14-01-36`。
+- 2026-09-09 15:45:59 已启动 `GLM-5.3-Flash` DeepSWE v1.1 full run：113 tasks、并发 4、temperature `0.95`、top_p `1.0`、agent timeout `21600s`、verifier timeout `1800s`；结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-full-flash/2026-09-09__15-45-58`。
+- 2026-09-09 23:02 `GLM-5.3-Flash` full run 进度为 26 completed、0 errored、4 running、83 pending；与 `GLM-5.3` 并行使用独立 rootless Docker data root。
+- 2026-09-10 19:12 `GLM-5.3-Flash` DeepSWE full run 完成：113/113 completed、0 errored、0 running、0 pending、0 retries，aggregate reward `0.6548672566371682`，F2P `0.9215`，P2P `0.9993`；输入 token `2,916,626,652`，输出 token `12,298,915`。结果为 local protocol-aligned variant，不宣称官方复现。
+- 2026-09-10 23:53 再次恢复 `GLM-5.3` 原 job；Pier 已加载 `2026-09-08__13-24-59`，首批 4 个 pending 任务进入环境构建。此前 9 个 `NonZeroAgentExitCodeError` 均为 262,144-token context 超限，4 个 `CancelledError` 为手动停止；本次不重跑 context 超限任务。
+- 2026-09-11 03:40 `GLM-5.3` DeepSWE 256K local variant 完成：113/113 result files，aggregate reward `0.5486725663716814`；其中 62 个 reward `1`、47 个 reward `0`、4 个取消任务无 eval reward。13 errors 为 9 个 `NonZeroAgentExitCodeError`（全部 256K context 超限）加 4 个手动停止 `CancelledError`；0 retries。结果不能直接对标官方 400K strict run 的 `0.669`。
+- 2026-09-11 13:01 4 个手动取消任务重跑完成：4/4 completed、0 error、0 retry，partial reward `0.9944`；`ytt-jsonpath-query-api`、`yjs-map-conflict-detection`、`bandit-incremental-cache-control` reward 均为 `1`，`prometheus-typed-label-sorting` reward 为 `0`（partial `0.9778`）。结果目录 `/data/leiqiaojie/glm53-bench/runs-116-shm-glm53-cancelled4-attempt3/glm53-deepswe-cancelled4-attempt3-20260911`。
+- 用上述 4 个结果替换原 4 个 `CancelledError` 后，`GLM-5.3` 256K local variant 的 replacement-adjusted aggregate reward 为 `0.5752212389380531`（65/113）；9 个 256K context 超限任务保持 expected failures，仍不宣称 strict 400K 官方复现。
+- 结果对比图与说明：`glm-5.3-coding-benchmarks/docs/deepswe-local-results-20260911.md`（官方 400K `0.669`、本地 GLM-5.3 `0.5752`、本地 GLM-5.3-Flash `0.6549`；图内已标注 9/113 个 256K context-overflow 任务和非同条件对照）。
 
 ---
 
@@ -892,6 +919,47 @@ model_check_feedback → calibration_report 全部通过。
 - **Phase 1 contract**：PR #2 新增 `docs/agent-team-runtime-contract.md`，定义 descriptor/bearer token 边界、HTTP/WS API、错误语义、兼容策略和必需 contract tests；推荐 Senza Studio backend proxy，避免 runtime token 进入浏览器或日志。
 - **后续顺序**：先 review contract，再实现 backend proxy 与 contract tests，最后迁移 React AgentTeam 工作区和 Electron 生命周期；runtime `team.html` 在 parity 前仅保留为开发 fallback。
 - **验证**：`git diff --check` 通过；PR 保持单 commit / 单文件。
+
+### 2026-09-05 senza-studio Agent Team backend proxy
+
+**仓库**：`senza-studio`；分支 `feat/agent-team-backend-proxy`（commit `e206882`，已推送到 fork，待开 PR）。
+
+- **集成边界**：Studio backend 挂载 `/api/team/{path}` 与 `/ws/team`，React 仅访问 Studio proxy；runtime descriptor、bearer token、编排、workspace、持久化和诊断继续留在 `llm-harness-runtime`。
+- **安全边界**：descriptor 使用 `O_NOFOLLOW` + regular-file + Unix 私有权限校验；仅允许 loopback HTTP upstream；拒绝 redirect、非安全 path、非法 Origin 和非法 bearer token 语法；HTTP/WS 响应做 token redaction；请求体和事件消息均有大小上限；WS 为只读事件流。
+- **生命周期**：FastAPI lifespan 复用 `httpx.AsyncClient`，禁用环境代理和 redirect；descriptor 通过 `SENZA_STUDIO_AGENT_TEAM_DESCRIPTOR` 配置，允许 Origin 通过 `SENZA_STUDIO_ALLOWED_ORIGINS` 配置且拒绝 `*`。
+- **验证**：`senza-studio` 全量 179 测试通过（含 16 个 proxy 单测和 1 个真实 runtime contract test）；真实 runtime 验证未认证 401、startup healthy、projects/templates、WS 握手和 token 不泄漏；`git diff --check` 通过。
+- **剩余缺口**：Studio backend 自身本地 API 认证、Electron 启动/停止 runtime 的完整生命周期、生产静态资源服务、跨平台打包策略、更完整 team CRUD/workspace/chat contract tests、pinned `senza-sdk 1.2.3` 验证和桌面 E2E smoke。
+
+### 2026-09-05 senza-studio 本地 API 认证
+
+**仓库**：`senza-studio`；stacked 分支 `feat/studio-local-api-auth`（commit `237cf3a`，基于 PR #3，已推送，暂不开 PR）。
+
+- **认证语义**：除 `/api/health` 与 `/auth/bootstrap` 外，所有 HTTP API 均要求认证；缺 token 启动 fail-closed，OpenAPI/docs 端点关闭。非浏览器客户端使用 Bearer token，浏览器/Electron 使用 `HttpOnly` + `SameSite=Strict` session cookie。
+- **WebSocket**：项目 WS 与 Agent Team 事件 WS 均支持 cookie、Bearer header 或 `senza-studio-bearer-<token>` 子协议；未认证连接以 1008 拒绝。
+- **配置与交付**：支持 `SENZA_STUDIO_API_TOKEN` 或私有 `SENZA_STUDIO_API_TOKEN_FILE`（Unix 0600、拒绝 symlink）；dev 脚本生成 256-bit token；Electron 生成/继承 token、等待健康检查、注入 cookie 并直接管理 Vite 进程。
+- **验证**：后端 189 测试通过；前端 `npm run build` 通过；`npm audit --omit=dev` 为 0 漏洞；`bash -n`、`node --check` 和 `git diff --check` 通过。Electron 桌面 E2E 仍未执行。
+- **剩余缺口**：同一 OS 用户恶意进程可读取 env/cookie 的更强威胁模型需要 OS sandbox/keyring，文档已明确边界；Electron runtime 生命周期与生产静态资源服务由 `feat/studio-desktop-host` 继续补齐。
+
+### 2026-09-06 senza-studio 桌面宿主生命周期
+
+**仓库**：`senza-studio`；stacked 分支 `feat/studio-desktop-host`（commit `327f9a2`，已推送到 fork，基于 PR #3 / local API auth，暂不开 PR）。
+
+- **Agent Team runtime 宿主**：Electron 启动真实 `agent-studio`，注入独立 data root 与 `STUDIO_PORT=0`，等待 stdout descriptor，校验路径、regular file 与 `llm-harness.studio.panel-descriptor.v1` schema 后才把 descriptor 传给 Python backend。
+- **监督与退出**：ready 后异常退出按 capped backoff 自动重启，快速连续失败达到上限后停止；稳定运行 30 秒重置失败计数。Unix 使用 process group SIGTERM/SIGKILL，Windows 使用 `taskkill /T /F` 兜底；退出后清理 stale descriptor。
+- **秘密边界**：runtime 环境移除 Studio API token、descriptor 和 provider 凭据；Electron/backend 输出统一 redact panel URL、query token 和 Studio API token，不读取或记录 runtime token。
+- **生产静态资源**：新增 `SENZA_STUDIO_STATIC_DIR`，只服务 regular file，拒绝 traversal、空段、控制字符和 symlink；仅 `/` fallback 到 `index.html`，Vite hash assets 使用 immutable cache。
+- **打包契约**：明确 packaged 资源必须位于 asar 外：`agent-studio`、Python backend、Python runtime 与 `studio_frontend/dist`；开发路径与 `SENZA_STUDIO_AGENT_TEAM_BIN` / `SENZA_STUDIO_PYTHON` 覆盖保留。
+- **验证**：Python 全量 194 测试通过；Electron runtime host 8 个 Vitest（含真实 runtime 启停）通过；`npm run build` 通过；`npm audit --omit=dev` 0 漏洞；`bash -n`、`node --check`、`git diff --check` 通过。
+- **剩余缺口**：Electron installer/打包 recipe、bundled Python、跨平台二进制、签名/公证、packaged E2E smoke 与桌面 UI 状态呈现仍未完成，因此桌面分发尚未达到生产级。
+
+### 2026-09-06 senza-studio CI validation
+
+**仓库**：`senza-studio`；独立 PR [#4](https://github.com/oh-my-harness/senza-studio/pull/4)，分支 `ci/senza-studio-validation`（commit `54961e0`，基于 `origin/main`）。
+
+- **Python job**：按 `senza-sdk.lock` 校验并检出精确 Senza commit `e67b14616d571f1a47701f12a9a9edc75ee0b312`，用其 `build_wheel.sh` 从源码构建 wheel 后安装，再运行 161 个后端测试、Senza API 兼容检查、`pip check`、`bash -n` 与 diff hygiene；不使用 release tag wheel，避免 lock commit 与 `v1.2.3` tag commit 不一致。
+- **Frontend job**：Node 20 + npm cache，`ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci`、TypeScript/Vite build、生产依赖 `npm audit --omit=dev`、Electron entry syntax check 与 diff hygiene；当前 main 无真实前端测试文件，因此不使用 `--passWithNoTests` 伪造测试通过。
+- **验证**：本地 Python 161/161 通过、22 个 Senza symbol 兼容检查通过、`pip check` 通过；前端干净安装、build 与生产依赖审计通过（0 vulnerabilities），`bash -n`、`node --check`、`git diff --check` 通过。另在干净 worktree 中从锁定 commit 构建出 `senza_sdk-1.2.3` wheel，装入全新 Python 3.12 venv 后复跑全量 Python 验证，结果仍为 161/161、22 symbol 无漂移、`pip check` 通过。
+- **待办**：仓库 Actions 目前未运行，已提 issue [#5](https://github.com/oh-my-harness/senza-studio/issues/5) 请有权限的同事启用；启用后监测 PR #4 的 CI。该分支不叠加在 PR #3 或 desktop host 分支上。
 
 ### 2026-08-31 agent-team durable inbox journal
 
