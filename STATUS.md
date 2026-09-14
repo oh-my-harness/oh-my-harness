@@ -966,17 +966,17 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-14 senza-studio 后续集成状态
 
-**仓库**：`senza-studio`；`main` 已推进到 `fd99a21`，PR #3/#4 均已合入。
+**仓库**：`senza-studio`；`main` 已推进到 `3652f3c`，PR #3/#4/#6/#8 均已合入。
 
 - **已进入 `main`**：AgentTeam backend proxy、runtime contract 测试和独立 CI；最新 `main` CI 成功。
-- **本地 API 认证**：已基于 `origin/main`（`fd99a21`）独立迁移到 `feat/studio-local-api-auth-main`（单 commit `e0a4232`），并已开启 [PR #6](https://github.com/oh-my-harness/senza-studio/pull/6)；保留 Phase 6/7 设置面板、模型 fallback 与文档解析能力，同时恢复 fail-closed API token、bootstrap cookie、HTTP/WS 认证和 Agent Team proxy 认证。
+- **本地 API 认证**：[PR #6](https://github.com/oh-my-harness/senza-studio/pull/6) 已 squash 合入 `main`（merge commit `e909d9d`）；保留 Phase 6/7 设置面板、模型 fallback 与文档解析能力，同时恢复 fail-closed API token、bootstrap cookie、HTTP/WS 认证和 Agent Team proxy 认证。
 - **CI 限制**：fork PR 无法读取 `PRIVATE_REPO_TOKEN`，因此 `Python validation` 会因私有 `llm-harness-runtime` 依赖无法拉取而失败；已记录为 [issue #7](https://github.com/oh-my-harness/senza-studio/issues/7)，需要在同仓库分支、公开构建产物或组织级安全凭据方案中选择一种生产可用的修复路径。
 - **验证**：从锁定 Senza commit `e67b14616d571f1a47701f12a9a9edc75ee0b312` 构建 `senza_sdk-1.2.3` wheel，在全新 Python 3.12 venv 中通过 430 tests + 1 skipped；SDK 22 symbol 兼容检查、`pip check`、`compileall`、`bash -n`、`node --check`、生产前端构建、生产 bundle 不嵌入 bootstrap token 检查和 `npm audit --omit=dev` 均通过。
-- **桌面宿主**：已基于 local API auth commit `e0a4232` 迁移到 `feat/studio-desktop-host-auth-main`（单 commit `8220b26`，已推送 fork，待 local API auth PR 合入后 rebase 开独立 PR）。实现 runtime supervisor、descriptor 路径/schema/大小/symlink 校验、环境秘密清理、backend/static host 生命周期和静态资源 fd 级安全服务；CI 已补 Electron runtime host 测试。
+- **桌面宿主**：[PR #8](https://github.com/oh-my-harness/senza-studio/pull/8) 已基于 PR #6 后的 `main` rebase 成单 commit 并 squash 合入（merge commit `3652f3c`）。实现 runtime supervisor、descriptor 路径/schema/大小/symlink 校验、环境秘密清理、backend/static host 生命周期和静态资源 fd 级安全服务；CI 已补 Electron runtime host 测试。
 - **进程生命周期加固**：新增 `DesktopProcessHost` 统一管理 Python backend 与 dev Vite 进程；输出经过 API token redaction，Unix 使用 process group SIGTERM + 10 秒 grace + SIGKILL，Windows 使用 `taskkill /T /F`，backend/Vite 异常退出会请求应用退出。修复构造参数字段不匹配导致 backend/Vite 实际未携带启动参数的问题；spawn 失败与 force-kill 失败显式传播，避免启动 race 静默等待或 shutdown 悬挂。
 - **桌面诊断**：新增 `<userData>/logs/desktop.jsonl` 私有宿主诊断流，schema 为 `llm-harness.studio.desktop-lifecycle.v1`，记录 host / Agent Team / backend / Vite 生命周期事件；输出复用脱敏规则，文本 16KiB、单事件 64KiB、日志 1MiB 轮转并保留 10 份，Unix 0700/0600 权限并拒绝 logs 目录与 active log symlink，shutdown 时 flush/close。
 - **桌面验证**：Python 435 tests + 1 skipped、SDK 22 symbol 兼容、`pip check`、`compileall`、Electron diagnostics/process/runtime host 19 tests + 1 skipped、真实 `agent-studio` 启停、生产前端构建、`npm audit --omit=dev` 0 漏洞、脚本/Node 语法和 diff 检查均通过。
-- **下一步**：先合入 local API auth 独立 PR；desktop host 分支当前叠在其上，需等 base 合入后 rebase 到 `main` 再开独立 PR，避免向上游 PR 混入两个功能提交。桌面 installer/打包、bundled Python、签名公证和 packaged E2E 仍是生产分发缺口。
+- **下一步**：继续补齐桌面 installer/打包、bundled Python、签名公证和 packaged E2E；同时解决 issue #7 的 fork PR CI 私有依赖访问限制。当前桌面宿主已具备生产级进程生命周期与诊断基础，但分发链路仍是缺口。
 
 ### 2026-08-31 agent-team durable inbox journal
 
