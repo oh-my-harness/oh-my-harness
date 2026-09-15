@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-15（Senza Studio 桌面 Linux 生产打包链路已完成本地全量验证。）
+> 最后更新：2026-09-15（llm-harness-runtime 远程 sandbox 协议客户端完成本地全量验证；Senza Studio 桌面 Linux 生产打包链路已完成本地全量验证。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -987,6 +987,16 @@ model_check_feedback → calibration_report 全部通过。
 - **打包验证**：完整 Linux packaging 通过，packaged desktop E2E 通过；前端 Vitest 26 passed / 1 skipped，Python pytest 440 passed / 1 skipped，`npm audit --omit=dev` 0 vulnerabilities。
 - **打包卫生**：拒绝 Python bytecode 与 `__pycache__` 进入发布产物，打包后的应用不携带开发源码树。
 - **跨平台边界**：Linux 分发链路已达到当前验证目标；macOS/Windows 仍缺 native signing、notarization 和 packaged E2E，不能声明生产级跨平台完成。
+
+### 2026-09-15 llm-harness-runtime remote sandbox backend
+
+**仓库**：`llm-harness-runtime`；分支 `feat/remote-sandbox-backend`（issue #193）。
+
+- **生产边界**：新增 `llm-harness-sandbox-remote`，定位为远程 sandbox 的 HTTPS/Bearer 协议客户端与 `Sandbox` / `ExecutionEnv` 适配器；真实 Firecracker/Kata/gVisor/container gateway、多租户调度、隔离执行、网络策略和孤儿回收不在该 crate 内实现。
+- **协议能力**：实现 JSON 控制面、文件操作、SSE 流式 shell、kill/reset/delete/cleanup、错误映射、响应大小上限和精确成功状态码校验；HTTP client 禁用 redirect 和环境代理，Content-Type 按大小写不敏感的 media type 严格解析；`RemoteSandboxClientConfig` 的 token `Debug` 输出脱敏，非 loopback HTTP 拒绝，IPv6 loopback HTTP 可用于本机测试；客户端会把 shell timeout 限制在 `max_exec_timeout` 内，未显式请求超时时使用该上限。
+- **安全防护**：guest path 统一要求 UTF-8 绝对路径并拒绝 `.` / `..` / NUL；校验 sandbox id、execution id、work_dir、backend、状态响应身份、文件元数据路径、目录条目归属和临时目录归属；`ExecutionEnv` 文件请求支持在途取消，shell 支持 timeout、abort 和输出上限；无效 create 响应会尽力删除已创建的远端实例；远端资源存在与 `Running` 状态分离，`Creating` 丢弃仍会清理，`shutdown` 成功只删除一次。
+- **验证**：`llm-harness-sandbox-remote` 22 个单元测试 + 12 个协议集成测试通过；非 live workspace 测试、workspace clippy `-D warnings` 和 `cargo fmt --check` 通过。测试网关明确只做协议验证，不提供生产隔离。
+- **剩余缺口**：需要真实隔离 gateway 实现并验证资源限额、网络默认拒绝、租户归属、生命周期审计和回收，才能宣称远程沙箱整体生产可用。
 
 ### 2026-08-31 agent-team durable inbox journal
 
