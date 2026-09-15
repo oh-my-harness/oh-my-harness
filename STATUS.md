@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-15（llm-harness-runtime 远程 sandbox 协议客户端完成本地全量验证；Senza Studio 桌面 Linux 生产打包链路已完成本地全量验证。）
+> 最后更新：2026-09-15（llm-harness-runtime AgentTeam 完成 GLM-5.3-Flash 真实三跳 E2E 验证；远程 sandbox 协议客户端与 Senza Studio 桌面 Linux 生产打包链路完成本地全量验证。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -963,6 +963,15 @@ model_check_feedback → calibration_report 全部通过。
 - **Frontend job**：Node 20 + npm cache，`ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci`、TypeScript/Vite build、生产依赖 `npm audit --omit=dev`、Electron entry syntax check 与 diff hygiene；当前 main 无真实前端测试文件，因此不使用 `--passWithNoTests` 伪造测试通过。
 - **验证**：本地 Python 161/161 通过、22 个 Senza symbol 兼容检查通过、`pip check` 通过；前端干净安装、build 与生产依赖审计通过（0 vulnerabilities），`bash -n`、`node --check`、`git diff --check` 通过。另在干净 worktree 中从锁定 commit 构建出 `senza_sdk-1.2.3` wheel，装入全新 Python 3.12 venv 后复跑全量 Python 验证，结果仍为 161/161、22 symbol 无漂移、`pip check` 通过。
 - **后续状态**：PR #4 已合入 `main`，GitHub Actions 已启用，最新 `main` CI 成功（run `34303852251`）；issue [#5](https://github.com/oh-my-harness/senza-studio/issues/5) 已按完成关闭。
+
+### 2026-09-15 llm-harness-runtime AgentTeam GLM E2E
+
+**仓库**：`llm-harness-runtime`；分支 `feat/agent-team-glm-e2e`（基于 `main` `1aa9237`，待提交/待 PR）。
+
+- **HTTPS 根因**：Hyperop 内网 GLM 网关使用本机系统 CA；`reqwest` 原先只启用 rustls WebPKI roots，导致 provider TLS 校验失败。workspace `reqwest` 增加 `rustls-tls-native-roots` feature。
+- **真实 E2E**：新增默认 ignored 的 `glm_5_3_flash_agent_team_delegates_coding_review_to_operator`，强制 `GLM-5.3-Flash`，并验证 operator → planner `delegate_task` → coder `delegate_task` → reviewer `send_message` → operator 的三跳闭环。
+- **防误判**：测试读取各成员 session transcript，断言三段目标工具调用各且仅发生一次，并校验 reviewer payload 与最终 operator 消息，避免把跳过成员、纯文本回复或错误目标当作通过。
+- **验证事实**：4096-token/temperature-0 配置下三跳链路连续两次真实完成，完整断言版最新通过（54.02s）；`26_agent_team` 三个场景在 HTTPS 下全部通过，其中 reflection 按模型判断合法弃权，未持久化 lesson，因此不宣称 reflection E2E 已验证。
 
 ### 2026-09-14 senza-studio 后续集成状态
 
