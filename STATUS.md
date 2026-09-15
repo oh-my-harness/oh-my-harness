@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-15（llm-harness-runtime AgentTeam 完成 GLM-5.3-Flash 真实三跳 E2E 验证；远程 sandbox 协议客户端与 Senza Studio 桌面 Linux 生产打包链路完成本地全量验证。）
+> 最后更新：2026-09-15（llm-harness-runtime AgentTeam 完成 GLM-5.3-Flash 真实三跳 E2E 验证；远程 sandbox 协议客户端完成验证；Senza Studio 桌面 Linux 生产打包 PR #10 完成本地全量验证并推送，远端 Python/Frontend CI 均通过。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -989,11 +989,14 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-15 senza-studio 桌面打包链路
 
-**仓库**：`senza-studio`；分支 `feat/desktop-packaging-pipeline`（commit `f0be13c`，已推送到远端）；配套 runtime 分支 `feat/studio-desktop-host`（commit `7af9f8e`，已推送）。
+**仓库**：`senza-studio`；PR [#10](https://github.com/oh-my-harness/senza-studio/pull/10)，分支 `feat/desktop-packaging-pipeline`（commit `ad207f1`，单 commit，已推送到远端）；配套 runtime 分支 `feat/studio-desktop-host`（commit `7af9f8e`，已推送）。
 
 - **Linux 打包**：新增 `scripts/package-desktop.sh linux`，构建生产前端与 Python backend，打包桌面资源和 AppImage；AppImage 包含 desktop metadata 与 1024×1024 icon。
+- **Python runtime**：升级到 python-build-standalone `20260901` / Python `3.12.14`；Linux archive 已实际下载并校验，四个平台 URL/SHA256 均与 GitHub Release asset metadata 一致（其中 Windows SHA 修正为上游值）。
+- **端口与下载**：默认优先 `7878`，占用时自动选择可用端口，显式 `SENZA_STUDIO_PORT` 仍强制使用且非法值 fail-fast；dev Vite proxy 跟随动态端口。Python runtime 下载增加 connect/max-time/low-speed/retry，Electron cache 显式继承用户环境。
+- **进程生命周期**：桌面 backend / Vite / AgentTeam 子进程继承 Electron 宿主进程组，外部 SIGTERM 进程组信号可清理全部子进程；应用自身正常退出仍走 `before-quit` 的逐进程 graceful stop。Packaged Xvfb E2E 验证外部 SIGTERM 后 backend 与 `agent-studio` 无泄漏。
 - **Runtime 交付**：packaged `agent-studio` 使用 bundled SQLite，去掉对宿主 `libsqlite3` 的运行时依赖；Agent Team 相关 targeted tests 通过。
-- **打包验证**：完整 Linux packaging 通过，packaged desktop E2E 通过；前端 Vitest 26 passed / 1 skipped，Python pytest 440 passed / 1 skipped，`npm audit --omit=dev` 0 vulnerabilities。
+- **打包验证**：完整 Linux packaging 通过，packaged Xvfb E2E 通过；前端 Vitest 30 passed，Python pytest 440 passed / 1 skipped，`npm audit --omit=dev` 0 vulnerabilities，`git diff --check` 通过；PR #10 远端 Python/Frontend CI 均成功。
 - **打包卫生**：拒绝 Python bytecode 与 `__pycache__` 进入发布产物，打包后的应用不携带开发源码树。
 - **跨平台边界**：Linux 分发链路已达到当前验证目标；macOS/Windows 仍缺 native signing、notarization 和 packaged E2E，不能声明生产级跨平台完成。
 
