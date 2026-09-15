@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-15（llm-harness-runtime AgentTeam 完成 GLM-5.3-Flash 真实三跳 E2E 验证；远程 sandbox 协议客户端完成验证；Senza Studio 桌面 Linux 生产打包 PR #10 完成本地全量验证并推送，远端 Python/Frontend CI 均通过。）
+> 最后更新：2026-09-15（llm-harness-runtime AgentTeam 完成 GLM-5.3-Flash 真实三跳 E2E 验证；远程 sandbox 协议客户端完成验证；Senza Studio 桌面 Linux 生产打包 PR #10 已合并 main，远端 Python/Frontend CI 均通过。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -989,7 +989,7 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-15 senza-studio 桌面打包链路
 
-**仓库**：`senza-studio`；PR [#10](https://github.com/oh-my-harness/senza-studio/pull/10)，分支 `feat/desktop-packaging-pipeline`（commit `ad207f1`，单 commit，已推送到远端）；配套 runtime 分支 `feat/studio-desktop-host`（commit `7af9f8e`，已推送）。
+**仓库**：`senza-studio`；PR [#10](https://github.com/oh-my-harness/senza-studio/pull/10) 已合并 `main`（commit `ad207f1`，单 commit）；配套 runtime 分支 `feat/studio-desktop-host`（commit `7af9f8e`，已推送）。
 
 - **Linux 打包**：新增 `scripts/package-desktop.sh linux`，构建生产前端与 Python backend，打包桌面资源和 AppImage；AppImage 包含 desktop metadata 与 1024×1024 icon。
 - **Python runtime**：升级到 python-build-standalone `20260901` / Python `3.12.14`；Linux archive 已实际下载并校验，四个平台 URL/SHA256 均与 GitHub Release asset metadata 一致（其中 Windows SHA 修正为上游值）。
