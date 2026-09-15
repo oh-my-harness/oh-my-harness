@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-14（Senza Studio local API auth 与 desktop host 迁移均已基于当前 PR 链路完成验证。）
+> 最后更新：2026-09-15（Senza Studio 桌面 Linux 生产打包链路已完成本地全量验证。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -977,6 +977,16 @@ model_check_feedback → calibration_report 全部通过。
 - **桌面诊断**：新增 `<userData>/logs/desktop.jsonl` 私有宿主诊断流，schema 为 `llm-harness.studio.desktop-lifecycle.v1`，记录 host / Agent Team / backend / Vite 生命周期事件；输出复用脱敏规则，文本 16KiB、单事件 64KiB、日志 1MiB 轮转并保留 10 份，Unix 0700/0600 权限并拒绝 logs 目录与 active log symlink，shutdown 时 flush/close。
 - **桌面验证**：基于 PR #9 后的 `main`，Python 435 tests + 1 skipped、SDK 22 symbol 兼容、`pip check`、`compileall`、Electron diagnostics/process/runtime host 19 tests + 1 skipped、真实 `agent-studio` 启停、生产前端构建、`npm audit --omit=dev` 0 漏洞、脚本/Node 语法、工作流 YAML 解析和 diff 检查均通过；GitHub Actions `Python validation` 与 `Frontend validation` 均成功。
 - **下一步**：继续补齐桌面 installer/打包、bundled Python、签名公证和 packaged E2E。当前桌面宿主已具备生产级进程生命周期与诊断基础，但分发链路仍是缺口。
+
+### 2026-09-15 senza-studio 桌面打包链路
+
+**仓库**：`senza-studio`；分支 `feat/desktop-packaging-pipeline`（commit `f0be13c`，已推送到远端）；配套 runtime 分支 `feat/studio-desktop-host`（commit `7af9f8e`，已推送）。
+
+- **Linux 打包**：新增 `scripts/package-desktop.sh linux`，构建生产前端与 Python backend，打包桌面资源和 AppImage；AppImage 包含 desktop metadata 与 1024×1024 icon。
+- **Runtime 交付**：packaged `agent-studio` 使用 bundled SQLite，去掉对宿主 `libsqlite3` 的运行时依赖；Agent Team 相关 targeted tests 通过。
+- **打包验证**：完整 Linux packaging 通过，packaged desktop E2E 通过；前端 Vitest 26 passed / 1 skipped，Python pytest 440 passed / 1 skipped，`npm audit --omit=dev` 0 vulnerabilities。
+- **打包卫生**：拒绝 Python bytecode 与 `__pycache__` 进入发布产物，打包后的应用不携带开发源码树。
+- **跨平台边界**：Linux 分发链路已达到当前验证目标；macOS/Windows 仍缺 native signing、notarization 和 packaged E2E，不能声明生产级跨平台完成。
 
 ### 2026-08-31 agent-team durable inbox journal
 
