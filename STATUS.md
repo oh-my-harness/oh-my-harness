@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-16（runtime-first AgentTeam 应用计划已合入 `main`；M1 runtime application shell 已推送 `llm-harness-runtime` 分支 `feat/runtime-app-shell`，commit `85910f9`，待开 PR；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；remote sandbox issue #193 review 修复已在 `feat/remote-sandbox-backend` 完成待提交；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
+> 最后更新：2026-09-16（runtime-first AgentTeam 应用计划、M1 runtime application shell 与 M2 AgentTeam feature API 均已合入 `llm-harness-runtime` `main`；最新 PR #198 squash merge commit `ea84c5a`；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 第一阶段已在 `feat/remote-sandbox-backend` 本地提交 `99cfac5`，待推送/待开 PR；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1048,13 +1048,23 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-16 llm-harness-runtime runtime application shell M1
 
-**仓库**：`llm-harness-runtime`；分支 `feat/runtime-app-shell`（基于 `origin/main` `937cb03`，单 commit `85910f9`，已推送，待开 PR）。
+**仓库**：`llm-harness-runtime`；已合入 `main`（commit `90fbf56`）。
 
 - **应用入口**：新增 `llm-harness-runtime-app` crate 与 `llm-harness-app` binary；`RuntimeAppConfig` 支持 `RUNTIME_APP_DATA_ROOT` / `RUNTIME_APP_PORT`，并回退到既有 `STUDIO_DATA_ROOT` / `STUDIO_PORT`，避免破坏现有部署。
 - **App API**：新增 `/api/app/health` 与 `/api/app/diagnostics`；health 基于最新 startup recovery 事件返回 `ok` / `degraded`，diagnostics 返回最近 lifecycle JSONL 事件，均复用 Inspector 本地认证。
 - **扩展点**：`StudioConfig::with_extra_routes` 允许上层应用向既有 Studio 服务注入路由，`StudioRuntime` 在 Inspector mount 前合并 app routes，保持 `agent-studio` 与 `/api/team/*` 完全兼容。
 - **验证**：`cargo fmt --all -- --check`、`cargo clippy -p llm-harness-runtime-app -p llm-harness-agent-team-studio --all-targets --all-features -- -D warnings`、`cargo test -p llm-harness-runtime-app --all-targets`（2/2）、`cargo test -p llm-harness-agent-team-studio --all-targets`（128 unit + 11 integration，3 live ignored）通过。
-- **剩余缺口**：M2 AgentTeam feature API 命名与模块化、React 工作区迁入 runtime、Windows lifecycle、数据根目录迁移、Tauri/系统 WebView 桌面打包与生产级 hardening。
+- **剩余缺口**：React 工作区迁入 runtime、Windows lifecycle、数据根目录迁移、Tauri/系统 WebView 桌面打包与生产级 hardening。
+
+### 2026-09-16 llm-harness-runtime AgentTeam feature API M2
+
+**仓库**：`llm-harness-runtime`；PR [#198](https://github.com/oh-my-harness/llm-harness-runtime/pull/198) 已 squash merge 到 `main`（commit `ea84c5a`）。
+
+- **Feature API**：`/api/agent-team/*` 成为 runtime app 内的 AgentTeam 前缀，复用与 `/api/team/*` 完全相同的 handlers；旧路径继续作为兼容 alias，避免破坏现有面板和外部消费者。
+- **应用健康**：`/api/app/health` 新增 `feature_health.agent-team`，输出 feature 级 `ok` / `degraded` 与启动恢复摘要，保留顶层 `startup_recovery` 兼容字段。
+- **验证**：`cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo test -p llm-harness-agent-team-studio --all-targets`（129 unit + 11 integration，3 live ignored）、`cargo test -p llm-harness-runtime-app --all-targets`、`cargo test --workspace --all-features --exclude llm-harness-live-tests` 通过。
+- **CI 事实**：PR 远端三平台 check 未启动，GitHub annotation 明确为账户付款/支出额度问题，不是代码失败；本地已执行与 CI 等价的非 live 检查。
+- **剩余缺口**：React 工作区迁入 runtime 并切换新 API 前缀、Windows lifecycle、数据根目录迁移、桌面打包与生产级 hardening。
 
 ### 2026-09-16 senza-studio AgentTeam 成员与 issue 控制第二切片
 
@@ -1068,13 +1078,14 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-15 llm-harness-runtime remote sandbox backend
 
-**仓库**：`llm-harness-runtime`；分支 `feat/remote-sandbox-backend`（issue #193）。
+**仓库**：`llm-harness-runtime`；分支 `feat/remote-sandbox-backend`（commit `99cfac5`，issue #193）。
 
-- **生产边界**：新增 `llm-harness-sandbox-remote`，定位为远程 sandbox 的 HTTPS/Bearer 协议客户端与 `Sandbox` / `ExecutionEnv` 适配器；真实 Firecracker/Kata/gVisor/container gateway、多租户调度、隔离执行、网络策略和孤儿回收不在该 crate 内实现。
+- **生产边界**：新增 `llm-harness-sandbox-remote`，定位为远程 sandbox 的 HTTPS/Bearer 协议客户端与 `Sandbox` / `ExecutionEnv` 适配器；新增 `llm-harness-sandbox-gateway` 作为 Linux Bwrap 第一阶段后端。它不是 Firecracker/Kata/gVisor VM 级隔离平台，也不包含完整多租户调度、镜像管理、网络策略执行、崩溃恢复和孤儿回收。
 - **协议能力**：实现 JSON 控制面、文件操作、SSE 流式 shell、kill/reset/delete/cleanup、错误映射、响应大小上限和精确成功状态码校验；SSE 支持 LF/CRLF/CR 且 CRLF 可跨网络 chunk 分割；HTTP client 禁用 redirect 和环境代理，Content-Type 按大小写不敏感的 media type 严格解析；`RemoteSandboxClientConfig` 的 token `Debug` 输出脱敏，非 loopback HTTP 拒绝，IPv6 loopback HTTP 可用于本机测试；HTTPS 使用 rustls native roots，可注入企业私有 CA；客户端会把 shell timeout 限制在 `max_exec_timeout` 内，未显式请求超时时使用该上限，低于 1ms 的协议 timeout 会被拒绝。
 - **安全防护**：guest path 统一要求 UTF-8 绝对路径并拒绝 `.` / `..` / NUL；校验 sandbox id、execution id、work_dir、backend、状态响应身份、文件元数据路径、目录条目归属和临时目录归属；`ExecutionEnv` 文件请求支持在途取消，shell 支持 timeout、abort 和输出上限；无效 create 响应会尽力删除已创建的远端实例；`RemoteEnv` 与 sandbox handle 共享远端资源所有权，最后一个引用 drop 时用独立 cleanup 线程尽力删除，`shutdown` 成功只删除一次。
-- **验证**：`llm-harness-sandbox-remote` 27 个单元测试 + 13 个协议集成测试通过；非 live workspace 测试、workspace clippy `-D warnings`、`cargo fmt --check` 和 `git diff --check` 通过。GLM-5.3-Flash 串行 live `agent_harness` 18/19 通过，唯一失败是 `auto_compact_triggers_on_threshold` 对模型输出长度的隐性依赖（该用例阈值 1150 token，短回答未触发），与本分支无关，待独立修正。测试网关明确只做协议验证，不提供生产隔离。
-- **剩余缺口**：需要真实隔离 gateway 实现并验证资源限额、网络默认拒绝、租户归属、生命周期审计和回收，才能宣称远程沙箱整体生产可用。
+- **Bwrap gateway**：Bearer 使用 SHA-256 digest 和常数时间比较；sandbox 记录绑定 principal，跨租户访问返回 404；gateway 生成独立 0700 work root 并拒绝 caller `work_dir`；文件操作走 `cap-std` capability 边界，shell 走 `bwrap --unshare-all` 且默认断网；SSE 立即返回 execution id 并后台执行，使实时 kill/abort 可用；创建容量检查持锁完成，temp dir/cleanup 统一在 `work_dir/.tmp` 且走沙箱互斥与 capability 边界；reset/delete/cleanup/kill 生命周期、有界 SSE/JSON body、timeout/output 上限和结构化日志已实现；`fs_denylist`、非空 `net_allowlist`、`max_disk_mb` 和无法执行的 cgroup v2 限额均失败关闭。
+- **验证**：`llm-harness-sandbox-remote` 27 个单元测试 + 13 个协议集成测试通过；`llm-harness-sandbox-gateway` 9 个集成测试通过（认证、租户隔离、文件边界、默认断网、timeout、实时 abort、并发容量、temp cleanup、reset/delete）；非 live workspace 测试、workspace clippy `-D warnings`、`cargo fmt --check` 和 `git diff --check` 通过。GLM-5.3-Flash 串行 live `agent_harness` 18/19 通过，唯一失败是 `auto_compact_triggers_on_threshold` 对模型输出长度的隐性依赖（该用例阈值 1150 token，短回答未触发），与本分支无关，待独立修正。
+- **剩余缺口**：cgroup v2 资源限额需部署级验证（本机 cgroup v1）；磁盘 quota、denylist、网络 allowlist 未实现并失败关闭；registry 仍在内存中，无崩溃恢复/孤儿 root 回收；无动态 token 撤销 API；审计日志还不是不可变 audit backend；`serve` 只提供 HTTP listener，TLS 必须由 ingress/sidecar/service mesh 终止；Bwrap 是 namespace/container 级隔离。#193 不建议关闭，应继续跟踪完整生产平台化。
 
 ### 2026-08-31 agent-team durable inbox journal
 
