@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-16（runtime-first AgentTeam 应用计划已在 `llm-harness-runtime` 分支 `docs/runtime-first-agent-team-app-plan` 完成，待评审/PR；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
+> 最后更新：2026-09-16（runtime-first AgentTeam 应用计划已在 `llm-harness-runtime` 分支 `docs/runtime-first-agent-team-app-plan` 完成，待评审/PR；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；remote sandbox issue #193 review 修复已在 `feat/remote-sandbox-backend` 完成待提交；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1061,9 +1061,9 @@ model_check_feedback → calibration_report 全部通过。
 **仓库**：`llm-harness-runtime`；分支 `feat/remote-sandbox-backend`（issue #193）。
 
 - **生产边界**：新增 `llm-harness-sandbox-remote`，定位为远程 sandbox 的 HTTPS/Bearer 协议客户端与 `Sandbox` / `ExecutionEnv` 适配器；真实 Firecracker/Kata/gVisor/container gateway、多租户调度、隔离执行、网络策略和孤儿回收不在该 crate 内实现。
-- **协议能力**：实现 JSON 控制面、文件操作、SSE 流式 shell、kill/reset/delete/cleanup、错误映射、响应大小上限和精确成功状态码校验；HTTP client 禁用 redirect 和环境代理，Content-Type 按大小写不敏感的 media type 严格解析；`RemoteSandboxClientConfig` 的 token `Debug` 输出脱敏，非 loopback HTTP 拒绝，IPv6 loopback HTTP 可用于本机测试；客户端会把 shell timeout 限制在 `max_exec_timeout` 内，未显式请求超时时使用该上限。
-- **安全防护**：guest path 统一要求 UTF-8 绝对路径并拒绝 `.` / `..` / NUL；校验 sandbox id、execution id、work_dir、backend、状态响应身份、文件元数据路径、目录条目归属和临时目录归属；`ExecutionEnv` 文件请求支持在途取消，shell 支持 timeout、abort 和输出上限；无效 create 响应会尽力删除已创建的远端实例；远端资源存在与 `Running` 状态分离，`Creating` 丢弃仍会清理，`shutdown` 成功只删除一次。
-- **验证**：`llm-harness-sandbox-remote` 22 个单元测试 + 12 个协议集成测试通过；非 live workspace 测试、workspace clippy `-D warnings` 和 `cargo fmt --check` 通过。测试网关明确只做协议验证，不提供生产隔离。
+- **协议能力**：实现 JSON 控制面、文件操作、SSE 流式 shell、kill/reset/delete/cleanup、错误映射、响应大小上限和精确成功状态码校验；SSE 支持 LF/CRLF/CR 且 CRLF 可跨网络 chunk 分割；HTTP client 禁用 redirect 和环境代理，Content-Type 按大小写不敏感的 media type 严格解析；`RemoteSandboxClientConfig` 的 token `Debug` 输出脱敏，非 loopback HTTP 拒绝，IPv6 loopback HTTP 可用于本机测试；HTTPS 使用 rustls native roots，可注入企业私有 CA；客户端会把 shell timeout 限制在 `max_exec_timeout` 内，未显式请求超时时使用该上限，低于 1ms 的协议 timeout 会被拒绝。
+- **安全防护**：guest path 统一要求 UTF-8 绝对路径并拒绝 `.` / `..` / NUL；校验 sandbox id、execution id、work_dir、backend、状态响应身份、文件元数据路径、目录条目归属和临时目录归属；`ExecutionEnv` 文件请求支持在途取消，shell 支持 timeout、abort 和输出上限；无效 create 响应会尽力删除已创建的远端实例；`RemoteEnv` 与 sandbox handle 共享远端资源所有权，最后一个引用 drop 时用独立 cleanup 线程尽力删除，`shutdown` 成功只删除一次。
+- **验证**：`llm-harness-sandbox-remote` 27 个单元测试 + 13 个协议集成测试通过；非 live workspace 测试、workspace clippy `-D warnings`、`cargo fmt --check` 和 `git diff --check` 通过。GLM-5.3-Flash 串行 live `agent_harness` 18/19 通过，唯一失败是 `auto_compact_triggers_on_threshold` 对模型输出长度的隐性依赖（该用例阈值 1150 token，短回答未触发），与本分支无关，待独立修正。测试网关明确只做协议验证，不提供生产隔离。
 - **剩余缺口**：需要真实隔离 gateway 实现并验证资源限额、网络默认拒绝、租户归属、生命周期审计和回收，才能宣称远程沙箱整体生产可用。
 
 ### 2026-08-31 agent-team durable inbox journal
