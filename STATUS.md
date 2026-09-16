@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-16（runtime-first AgentTeam 应用计划已在 `llm-harness-runtime` 分支 `docs/runtime-first-agent-team-app-plan` 完成，待评审/PR；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；remote sandbox issue #193 review 修复已在 `feat/remote-sandbox-backend` 完成待提交；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
+> 最后更新：2026-09-16（runtime-first AgentTeam 应用计划已合入 `main`；M1 runtime application shell 已推送 `llm-harness-runtime` 分支 `feat/runtime-app-shell`，commit `85910f9`，待开 PR；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；remote sandbox issue #193 review 修复已在 `feat/remote-sandbox-backend` 完成待提交；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1045,6 +1045,16 @@ model_check_feedback → calibration_report 全部通过。
 - **实施顺序**：M0 契约冻结 → M1 runtime application shell → M2 AgentTeam feature module 化 → M3 React 工作区迁入 → M4 Windows lifecycle 与数据迁移 → M5 桌面打包 → M6 生产级 hardening。
 - **事实结论**：现有 `agent-team-studio` 已具备后端、认证、持久化、恢复、诊断和 Unix host supervisor 基础，可以增量演进；但入口、通用 app crate、React UI 归属、Windows lifecycle、桌面打包和数据迁移仍未闭环，当前不能宣称生产级应用。
 - **验证**：`cargo fmt --all -- --check`、`cargo clippy --all-targets --all-features -- -D warnings`、`cargo test --workspace --exclude llm-harness-live-tests` 通过；完整 workspace 测试在本机先因缺少 sqlite 开发链接符号失败，使用真实 `/lib64/libsqlite3.so.0` 临时链接后，`llm-harness-live-tests` 因当前环境未配置 provider 返回空响应而失败，非文档变更引入。
+
+### 2026-09-16 llm-harness-runtime runtime application shell M1
+
+**仓库**：`llm-harness-runtime`；分支 `feat/runtime-app-shell`（基于 `origin/main` `937cb03`，单 commit `85910f9`，已推送，待开 PR）。
+
+- **应用入口**：新增 `llm-harness-runtime-app` crate 与 `llm-harness-app` binary；`RuntimeAppConfig` 支持 `RUNTIME_APP_DATA_ROOT` / `RUNTIME_APP_PORT`，并回退到既有 `STUDIO_DATA_ROOT` / `STUDIO_PORT`，避免破坏现有部署。
+- **App API**：新增 `/api/app/health` 与 `/api/app/diagnostics`；health 基于最新 startup recovery 事件返回 `ok` / `degraded`，diagnostics 返回最近 lifecycle JSONL 事件，均复用 Inspector 本地认证。
+- **扩展点**：`StudioConfig::with_extra_routes` 允许上层应用向既有 Studio 服务注入路由，`StudioRuntime` 在 Inspector mount 前合并 app routes，保持 `agent-studio` 与 `/api/team/*` 完全兼容。
+- **验证**：`cargo fmt --all -- --check`、`cargo clippy -p llm-harness-runtime-app -p llm-harness-agent-team-studio --all-targets --all-features -- -D warnings`、`cargo test -p llm-harness-runtime-app --all-targets`（2/2）、`cargo test -p llm-harness-agent-team-studio --all-targets`（128 unit + 11 integration，3 live ignored）通过。
+- **剩余缺口**：M2 AgentTeam feature API 命名与模块化、React 工作区迁入 runtime、Windows lifecycle、数据根目录迁移、Tauri/系统 WebView 桌面打包与生产级 hardening。
 
 ### 2026-09-16 senza-studio AgentTeam 成员与 issue 控制第二切片
 
