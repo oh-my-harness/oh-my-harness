@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-16（Senza Studio AgentTeam React 工作区 PR #13 已按单 commit squash 合并 main（`ae4c8e4`）；Frontend、Python、Windows packaging 与 packaged Windows E2E CI 全部通过。）
+> 最后更新：2026-09-16（Senza Studio AgentTeam React 工作区 PR #13 已按单 commit squash 合并 main（`ae4c8e4`）；成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1025,6 +1025,16 @@ model_check_feedback → calibration_report 全部通过。
 - **验证**：Linux AppImage packaging 通过；前端 build + Vitest 33 passed；真实 packaged desktop E2E passed；全量 Python pytest 441 passed / 1 skipped；release runtime contract test 1 passed；`git diff --check` 通过。
 - **CI 与合并状态**：PR #13 / `main` commit `ae4c8e4` 上 Frontend validation、Python validation、Windows packaging 与 packaged Windows E2E 全部成功；远端功能分支已清理。
 - **剩余缺口**：Agent 成员配置/历史/issue 操作、文件授权选择器和 runtime debug panel 的完整 feature parity；issue #1 不能关闭。
+
+### 2026-09-16 senza-studio AgentTeam 成员与 issue 控制第二切片
+
+**仓库**：`senza-studio`；分支 `feat/agent-team-member-issues`（commit `5f89139`，单 commit，已推送，待开 PR）。
+
+- **Issue 操作**：React 工作区新增 issue 列表、状态展示、确认和拒绝操作；通过 Senza backend proxy 调用 runtime local API，确认/拒绝后的列表与 pulse 会刷新，409 等错误保留给操作者。
+- **成员详情**：新增成员配置投影、persona/model/base URL/API key 覆盖、会话历史展示和手动刷新；成员 API key 只提交不回显，会话历史每 5 秒刷新。
+- **竞态防护**：团队/成员切换时使用当前选择守卫和成员请求版本号，防止旧 pulse、issue 或成员详情响应覆盖新选择；配置加载不会轮询覆盖未保存输入。
+- **验证**：前端 build + Vitest 37 passed / 1 skipped；真实 runtime contract 1 passed；全量 Python pytest 443 passed / 1 skipped；最终代码 Linux AppImage packaging 通过。
+- **E2E 边界**：packaged E2E 已扩展成员配置保存、会话历史和 issue 面板断言；本开发机缺少 `Xvfb`，本地无法执行真实桌面 E2E，需依赖 CI 的 Linux Xvfb 路径。 Electron 31 `--ozone-platform=headless` 在 AppImage 路径下仍尝试 X11，不能作为替代验证。
 
 ### 2026-09-15 llm-harness-runtime remote sandbox backend
 
