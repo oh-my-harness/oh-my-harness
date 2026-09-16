@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-16（Senza Studio AgentTeam React 工作区 PR #13 已按单 commit squash 合并 main（`ae4c8e4`）；成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
+> 最后更新：2026-09-16（runtime-first AgentTeam 应用计划已在 `llm-harness-runtime` 分支 `docs/runtime-first-agent-team-app-plan` 完成，待评审/PR；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1025,6 +1025,16 @@ model_check_feedback → calibration_report 全部通过。
 - **验证**：Linux AppImage packaging 通过；前端 build + Vitest 33 passed；真实 packaged desktop E2E passed；全量 Python pytest 441 passed / 1 skipped；release runtime contract test 1 passed；`git diff --check` 通过。
 - **CI 与合并状态**：PR #13 / `main` commit `ae4c8e4` 上 Frontend validation、Python validation、Windows packaging 与 packaged Windows E2E 全部成功；远端功能分支已清理。
 - **剩余缺口**：Agent 成员配置/历史/issue 操作、文件授权选择器和 runtime debug panel 的完整 feature parity；issue #1 不能关闭。
+
+### 2026-09-16 llm-harness-runtime runtime-first AgentTeam 应用计划
+
+**仓库**：`llm-harness-runtime`；分支 `docs/runtime-first-agent-team-app-plan`（基于 `origin/main` `b572bde`，单 commit，待评审/PR）。
+
+- **方向调整**：`llm-harness-runtime` 将提供 first-party 本地应用入口，AgentTeam 作为 runtime 应用内置 feature module；`senza-studio` 不再作为 AgentTeam 能力所有者，只在过渡期作为兼容消费者或通用 shell。
+- **计划文档**：新增 `docs/design/2026-09-16-runtime-first-agent-team-app-plan.md`，覆盖当前能力/缺口、目标架构、crate 演进、API 兼容、React UI 迁移、Tauri/系统 WebView 桌面策略、数据迁移、安全、生命周期、测试与发布判定。
+- **实施顺序**：M0 契约冻结 → M1 runtime application shell → M2 AgentTeam feature module 化 → M3 React 工作区迁入 → M4 Windows lifecycle 与数据迁移 → M5 桌面打包 → M6 生产级 hardening。
+- **事实结论**：现有 `agent-team-studio` 已具备后端、认证、持久化、恢复、诊断和 Unix host supervisor 基础，可以增量演进；但入口、通用 app crate、React UI 归属、Windows lifecycle、桌面打包和数据迁移仍未闭环，当前不能宣称生产级应用。
+- **验证**：`cargo fmt --all -- --check`、`cargo clippy --all-targets --all-features -- -D warnings`、`cargo test --workspace --exclude llm-harness-live-tests` 通过；完整 workspace 测试在本机先因缺少 sqlite 开发链接符号失败，使用真实 `/lib64/libsqlite3.so.0` 临时链接后，`llm-harness-live-tests` 因当前环境未配置 provider 返回空响应而失败，非文档变更引入。
 
 ### 2026-09-16 senza-studio AgentTeam 成员与 issue 控制第二切片
 
