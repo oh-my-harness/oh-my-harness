@@ -1011,6 +1011,16 @@ model_check_feedback → calibration_report 全部通过。
 - **CI 与合并状态**：PR #12 / `main` commit `04da48c` 上 Python validation、Frontend validation、Windows packaging and packaged E2E 均成功；PR 与 issue 已自动关闭，远端功能分支已清理。
 - **当前边界**：Linux 与 Windows 打包验证链路均已闭环；macOS 仍缺 native signing、notarization 与 packaged E2E，不能声明三平台全部分发生产级完成。
 
+### 2026-09-16 senza-studio AgentTeam React 工作区第一切片
+
+**仓库**：`senza-studio`；分支 `feat/agent-team-workspace`（commit `e226eb1`，单 commit，已推送，待开 PR）。
+
+- **前端工作区**：新增 Agent Teams 首页入口和 React 工作区，支持 runtime 模型/API key/base URL/scout 间隔设置、团队创建、列表、选择、重启、删除、成员 pulse、待处理消息/issue/timer 汇总、事件流和向指定成员发送消息；浏览器只访问 Senza backend proxy，不接触 runtime token。
+- **事件流**：新增 `/ws/team` 客户端封装，包含 JSON 事件校验、自动重连、状态展示和 50 条事件上限；测试覆盖合法/非法事件、重连和关闭后不再重连。
+- **真实契约**：扩展真实 `agent-studio` contract test，覆盖 runtime settings、创建团队、项目列表、pulse、chat、重启、删除和最终清空；避免只验证 proxy 转发。
+- **验证**：前端 build 通过，Vitest 32 passed / 1 skipped，`npm audit --omit=dev` 0 vulnerabilities；全量 Python pytest 441 passed / 1 skipped；真实 runtime contract（含创建/运行/重启/删除）通过。
+- **剩余缺口**：尚未做浏览器级 UI E2E、Agent 成员配置/历史/issue 操作、文件授权选择器和 runtime debug panel 的完整 feature parity；issue #1 不能关闭。
+
 ### 2026-09-15 llm-harness-runtime remote sandbox backend
 
 **仓库**：`llm-harness-runtime`；分支 `feat/remote-sandbox-backend`（issue #193）。
