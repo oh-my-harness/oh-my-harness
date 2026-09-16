@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-16（runtime-first AgentTeam 应用计划已在 `llm-harness-runtime` 分支 `docs/runtime-first-agent-team-app-plan` 完成，待评审/PR；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
+> 最后更新：2026-09-16（runtime-first AgentTeam 应用计划已在 `llm-harness-runtime` 分支 `docs/runtime-first-agent-team-app-plan` 完成，待评审/PR；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1025,6 +1025,15 @@ model_check_feedback → calibration_report 全部通过。
 - **验证**：Linux AppImage packaging 通过；前端 build + Vitest 33 passed；真实 packaged desktop E2E passed；全量 Python pytest 441 passed / 1 skipped；release runtime contract test 1 passed；`git diff --check` 通过。
 - **CI 与合并状态**：PR #13 / `main` commit `ae4c8e4` 上 Frontend validation、Python validation、Windows packaging 与 packaged Windows E2E 全部成功；远端功能分支已清理。
 - **剩余缺口**：Agent 成员配置/历史/issue 操作、文件授权选择器和 runtime debug panel 的完整 feature parity；issue #1 不能关闭。
+
+### 2026-09-16 llm-harness-runtime LoopConfig 生产级修复
+
+**仓库**：`llm-harness-runtime`；PR [#196](https://github.com/oh-my-harness/llm-harness-runtime/pull/196)，分支 `fix/loop-config-retry-jump`，远端 head `1e31d60`。
+
+- **审查结论**：两个原始问题均真实可复现——`target_stage == 当前步骤` 时 `To(self)` 不计入 LoopConfig，最终落入 `max_steps`；`To`/`Retry` 续环耗尽或跳转后崩溃，Running 恢复会被原始 transition 覆盖 `current_step`，导致已退出/目标循环被重跑。
+- **修复**：自环 `To(self)` 计为 continuation；`StepRecord.transition` 持久化引擎实际执行的 effective transition，覆盖 exit target / target stage；LoopConfig 持久化前释放 workflow state 锁，避免持锁 await I/O；同步修正自环注释与 transition 契约说明。
+- **回归测试**：新增自环计数、`To` exit route 崩溃恢复、`Retry -> target_stage` 崩溃恢复三条测试。
+- **验证**：`cargo fmt --check`、`cargo clippy -p llm-harness-workflow --all-targets --all-features -- -D warnings`、`cargo test -p llm-harness-workflow --all-features`、`cargo test --workspace --exclude llm-harness-live-tests` 通过。完整 live tests 需外部 LLM 环境，未纳入本次本地验证。
 
 ### 2026-09-16 llm-harness-runtime runtime-first AgentTeam 应用计划
 
