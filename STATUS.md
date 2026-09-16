@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-16（Senza Studio 桌面 Windows NSIS 打包、Authenticode 签名与 packaged E2E PR #12 已合并 main，Python/Frontend/Windows CI 均通过；issue #11 已关闭。）
+> 最后更新：2026-09-16（Senza Studio AgentTeam React 工作区完成真实 packaged 桌面 E2E，单 commit 分支 `feat/agent-team-workspace` 已推送待开 PR；Windows NSIS 打包 PR #12 已合并 main。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1013,13 +1013,16 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-16 senza-studio AgentTeam React 工作区第一切片
 
-**仓库**：`senza-studio`；分支 `feat/agent-team-workspace`（commit `e226eb1`，单 commit，已推送，待开 PR）。
+**仓库**：`senza-studio`；分支 `feat/agent-team-workspace`（commit `76dd68e`，单 commit，已推送，待开 PR）。
 
 - **前端工作区**：新增 Agent Teams 首页入口和 React 工作区，支持 runtime 模型/API key/base URL/scout 间隔设置、团队创建、列表、选择、重启、删除、成员 pulse、待处理消息/issue/timer 汇总、事件流和向指定成员发送消息；浏览器只访问 Senza backend proxy，不接触 runtime token。
 - **事件流**：新增 `/ws/team` 客户端封装，包含 JSON 事件校验、自动重连、状态展示和 50 条事件上限；测试覆盖合法/非法事件、重连和关闭后不再重连。
 - **真实契约**：扩展真实 `agent-studio` contract test，覆盖 runtime settings、创建团队、项目列表、pulse、chat、重启、删除和最终清空；避免只验证 proxy 转发。
-- **验证**：前端 build 通过，Vitest 32 passed / 1 skipped，`npm audit --omit=dev` 0 vulnerabilities；全量 Python pytest 441 passed / 1 skipped；真实 runtime contract（含创建/运行/重启/删除）通过。
-- **剩余缺口**：尚未做浏览器级 UI E2E、Agent 成员配置/历史/issue 操作、文件授权选择器和 runtime debug panel 的完整 feature parity；issue #1 不能关闭。
+- **桌面宿主**：SIGTERM/SIGINT 转为 Electron graceful quit；关闭时先销毁主窗口以断开 UI WebSocket，抑制 shutdown 中的 `window-all-closed` 重入，等待 backend/Vite/AgentTeam 全部停止后记录 `shutdown-stopped` 并 flush diagnostics。
+- **Packaged E2E**：Linux 使用私有 Xvfb 启动真实 AppImage，并通过 CDP 驱动真实 React UI：打开 Agent Teams、保存 runtime 设置、创建团队、选择 planner、发送消息、验证 `/ws/team` 与 operator 事件、重启团队、二次启动验证持久化、再次发送消息并删除团队；同时覆盖 public health、静态 UI/private API 认证、Studio token 只进入 backend、AgentTeam 不接收 Studio token、进程树清理和完整 lifecycle 事件。
+- **Runtime pin**：`packaging/agent-team-runtime.json` 更新到已推送的 `6c61407`，使用包含 restart 修复的 release `agent-studio` 构建产物。
+- **验证**：Linux AppImage packaging 通过；前端 build + Vitest 33 passed；真实 packaged desktop E2E passed；全量 Python pytest 441 passed / 1 skipped；release runtime contract test 1 passed；`git diff --check` 通过。
+- **剩余缺口**：Agent 成员配置/历史/issue 操作、文件授权选择器和 runtime debug panel 的完整 feature parity；issue #1 不能关闭。
 
 ### 2026-09-15 llm-harness-runtime remote sandbox backend
 
