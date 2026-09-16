@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-15（llm-harness-runtime AgentTeam 完成 GLM-5.3-Flash 真实三跳 E2E 验证；远程 sandbox 协议客户端完成验证；Senza Studio 桌面 Linux 生产打包 PR #10 已合并 main，远端 Python/Frontend CI 均通过。）
+> 最后更新：2026-09-16（Senza Studio 桌面 Windows NSIS 打包、Authenticode 签名与 packaged E2E PR #12 已合并 main，Python/Frontend/Windows CI 均通过；issue #11 已关闭。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -999,6 +999,17 @@ model_check_feedback → calibration_report 全部通过。
 - **打包验证**：完整 Linux packaging 通过，packaged Xvfb E2E 通过；前端 Vitest 30 passed，Python pytest 440 passed / 1 skipped，`npm audit --omit=dev` 0 vulnerabilities，`git diff --check` 通过；PR #10 远端 Python/Frontend CI 均成功。
 - **打包卫生**：拒绝 Python bytecode 与 `__pycache__` 进入发布产物，打包后的应用不携带开发源码树。
 - **跨平台边界**：Linux 分发链路已达到当前验证目标；macOS/Windows 仍缺 native signing、notarization 和 packaged E2E，不能声明生产级跨平台完成。
+
+### 2026-09-16 senza-studio Windows 桌面打包闭环
+
+**仓库**：`senza-studio`；issue [#11](https://github.com/oh-my-harness/senza-studio/issues/11) 已关闭；PR [#12](https://github.com/oh-my-harness/senza-studio/pull/12) 已按单 commit 合并 `main`（commit `04da48c`）。
+
+- **Windows 构建**：`scripts/package-desktop.sh win` 在原生 Windows x86_64 上构建 NSIS installer，输出稳定命名 `senza-studio-<version>-win-x64.exe` 与 `.sha256` checksum；打包前固定并校验 Agent Team runtime commit（`b572bde`）。
+- **签名链路**：Windows release/tag 构建强制要求 `WINDOWS_CSC_LINK`、`WINDOWS_CSC_KEY_PASSWORD` 与 `WINDOWS_CERTIFICATE_THUMBPRINT` secrets，执行 Authenticode SHA-256 签名并用 `Get-AuthenticodeSignature` 验证 signer；非 tag CI 使用临时自签证书覆盖同一构建/验证路径。
+- **资源完整性**：新增 `desktop-resources.v1` 扩展 manifest，记录 Agent Team、Python executable、backend entrypoint、frontend bundle 与 Python runtime archive checksum；安装后 E2E 会重新校验这些资源。
+- **Packaged E2E**：Windows 原生 CI 静默安装真实 NSIS installer，启动真实桌面应用，验证 public health、静态 UI/private API 认证、生产 asset 加载、AgentTeam descriptor、Python user-site 隔离、AgentTeam 崩溃后 supervisor 重启、graceful shutdown 诊断、外部强杀后的进程树清理与卸载。
+- **CI 与合并状态**：PR #12 / `main` commit `04da48c` 上 Python validation、Frontend validation、Windows packaging and packaged E2E 均成功；PR 与 issue 已自动关闭，远端功能分支已清理。
+- **当前边界**：Linux 与 Windows 打包验证链路均已闭环；macOS 仍缺 native signing、notarization 与 packaged E2E，不能声明三平台全部分发生产级完成。
 
 ### 2026-09-15 llm-harness-runtime remote sandbox backend
 
