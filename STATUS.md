@@ -1028,12 +1028,13 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-16 llm-harness-runtime LoopConfig 生产级修复
 
-**仓库**：`llm-harness-runtime`；PR [#196](https://github.com/oh-my-harness/llm-harness-runtime/pull/196)，分支 `fix/loop-config-retry-jump`，远端 head `1e31d60`。
+**仓库**：`llm-harness-runtime`；PR [#196](https://github.com/oh-my-harness/llm-harness-runtime/pull/196)，分支 `fix/loop-config-retry-jump`，远端 head `efef3dd`。
 
 - **审查结论**：两个原始问题均真实可复现——`target_stage == 当前步骤` 时 `To(self)` 不计入 LoopConfig，最终落入 `max_steps`；`To`/`Retry` 续环耗尽或跳转后崩溃，Running 恢复会被原始 transition 覆盖 `current_step`，导致已退出/目标循环被重跑。
 - **修复**：自环 `To(self)` 计为 continuation；`StepRecord.transition` 持久化引擎实际执行的 effective transition，覆盖 exit target / target stage；LoopConfig 持久化前释放 workflow state 锁，避免持锁 await I/O；同步修正自环注释与 transition 契约说明。
 - **回归测试**：新增自环计数、`To` exit route 崩溃恢复、`Retry -> target_stage` 崩溃恢复三条测试。
-- **验证**：`cargo fmt --check`、`cargo clippy -p llm-harness-workflow --all-targets --all-features -- -D warnings`、`cargo test -p llm-harness-workflow --all-features`、`cargo test --workspace --exclude llm-harness-live-tests` 通过。完整 live tests 需外部 LLM 环境，未纳入本次本地验证。
+- **Live 稳定性补充**：OpenAI/Anthropic smoke 与 tool-error 测试读取事件前显式 `settle()`，消除 `EventCapture` 后台 drain 竞态；auto-compaction 测试加入确定性 context padding，使触发阈值不依赖模型输出 token 波动。
+- **验证**：`cargo fmt --all --check`、`cargo clippy -p llm-harness-live-tests --all-targets --all-features -- -D warnings`、`cargo test -p llm-harness-workflow --all-features`、`cargo test --workspace --exclude llm-harness-live-tests` 通过。真实 LLM 使用 GLM-5.3-Flash 复验 OpenAI smoke、tool-error propagation、auto-compaction threshold 均通过；此前 full live 95/98 通过，非 Anthropic 失败已确认由输出非确定性/测试假设导致并复跑或修复，剩余两例 Anthropic 失败为本机 CA 链与 API 403 环境问题，非 PR 回归。
 
 ### 2026-09-16 llm-harness-runtime runtime-first AgentTeam 应用计划
 
