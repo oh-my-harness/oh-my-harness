@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-17（runtime-first AgentTeam 应用计划、M1 runtime application shell 与 M2 AgentTeam feature API 均已合入 `llm-harness-runtime` `main`；最新 PR #198 squash merge commit `ea84c5a`；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已推送 `feat/remote-sandbox-backend`（`99cfac5`、`f3b9073`），待开 PR；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
+> 最后更新：2026-09-17（runtime-first AgentTeam 应用计划、M1 runtime application shell 与 M2 AgentTeam feature API 均已合入 `llm-harness-runtime` `main`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1078,13 +1078,14 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-15 llm-harness-runtime remote sandbox backend
 
-**仓库**：`llm-harness-runtime`；分支 `feat/remote-sandbox-backend`（commits `99cfac5` + `f3b9073`，issue #193，已推送，待开 PR）。
+**仓库**：`llm-harness-runtime`；`feat/remote-sandbox-backend`（commits `99cfac5` + `f3b9073`）已合并 `main`（merge commit `238fc21`，issue #193）。
 
 - **生产边界**：新增 `llm-harness-sandbox-remote`，定位为远程 sandbox 的 HTTPS/Bearer 协议客户端与 `Sandbox` / `ExecutionEnv` 适配器；新增 `llm-harness-sandbox-gateway` 作为 Linux Bwrap 第一阶段后端。它不是 Firecracker/Kata/gVisor VM 级隔离平台，也不包含完整多租户调度、镜像管理、网络策略执行或持久化实例恢复。
 - **协议能力**：实现 JSON 控制面、文件操作、SSE 流式 shell、kill/reset/delete/cleanup、错误映射、响应大小上限和精确成功状态码校验；SSE 支持 LF/CRLF/CR 且 CRLF 可跨网络 chunk 分割；HTTP client 禁用 redirect 和环境代理，Content-Type 按大小写不敏感的 media type 严格解析；`RemoteSandboxClientConfig` 的 token `Debug` 输出脱敏，非 loopback HTTP 拒绝，IPv6 loopback HTTP 可用于本机测试；HTTPS 使用 rustls native roots，可注入企业私有 CA；客户端会把 shell timeout 限制在 `max_exec_timeout` 内，未显式请求超时时使用该上限，低于 1ms 的协议 timeout 会被拒绝。
 - **安全防护**：guest path 统一要求 UTF-8 绝对路径并拒绝 `.` / `..` / NUL；校验 sandbox id、execution id、work_dir、backend、状态响应身份、文件元数据路径、目录条目归属和临时目录归属；`ExecutionEnv` 文件请求支持在途取消，shell 支持 timeout、abort 和输出上限；无效 create 响应会尽力删除已创建的远端实例；`RemoteEnv` 与 sandbox handle 共享远端资源所有权，最后一个引用 drop 时用独立 cleanup 线程尽力删除，`shutdown` 成功只删除一次。
 - **Bwrap gateway**：Bearer 使用 SHA-256 digest 和常数时间比较；sandbox 记录绑定 principal，跨租户访问返回 404；gateway 生成独立 0700 work root 并拒绝 caller `work_dir`；文件操作走 `cap-std` capability 边界，shell 走 `bwrap --unshare-all` 且默认断网；SSE 立即返回 execution id 并后台执行，使实时 kill/abort 可用；创建容量检查持锁完成，temp dir/cleanup 统一在 `work_dir/.tmp` 且走沙箱互斥与 capability 边界；reset/delete/cleanup/kill 生命周期、有界 SSE/JSON body、timeout/output 上限和结构化日志已实现；`fs_denylist`、非空 `net_allowlist`、`max_disk_mb` 和无法执行的 cgroup v2 限额均失败关闭。
 - **崩溃恢复（第二阶段，`f3b9073`）**：gateway 使用绝对 canonical 0700 非 symlink work root（默认 `/tmp/llm-harness-sandbox-gateway`），其下 `sandboxes` 为 0700、`.gateway.lock` 为 0600 regular file；启动时以 `flock(LOCK_EX | LOCK_NB)` 拒绝双 gateway 共用 root，只回收 `sandboxes` 下 UUID 命名的直接子目录，非 UUID/symlink/非目录条目 fail-closed 保留给运维；孤儿目录内 symlink 不跟随删除，活动 bwrap 命令使用 `--die-with-parent`；`BwrapSandbox::new_owned` 在 canonicalize 前校验 symlink 与 0700，invalid create 不遗留 work root。
+- **合并与跟踪**：已在最新 `main` 上完成真实 merge 并重跑 `cargo fmt --check`、workspace clippy `-D warnings` 和非 live workspace tests；#193 保持 open 作为 umbrella issue，生产化后续已拆为 #199（持久 registry/重启连续性）、#200（cgroup v2 部署验证）、#201（磁盘 quota）、#202（fs denylist）、#203（网络 allowlist）、#204（token 轮换/撤销）、#205（不可变审计）、#206（TLS/部署 runbook）、#207（VM 级隔离后端）。
 - **验证**：`llm-harness-sandbox-remote` 27 个单元测试 + 13 个协议集成测试通过；第二阶段受影响 sandbox 测试 111 passed / 26 environment-ignored，gateway 16 个集成测试通过（认证、租户隔离、文件边界、默认断网、timeout、实时 abort、并发容量、temp cleanup、reset/delete、work-root lock/恢复/symlink/异常条目）；非 live workspace 测试、workspace clippy `-D warnings`、`cargo fmt --check` 和 `git diff --check` 通过。GLM-5.3-Flash 串行 live `agent_harness` 18/19 通过，唯一失败是 `auto_compact_triggers_on_threshold` 对模型输出长度的隐性依赖（该用例阈值 1150 token，短回答未触发），与本分支无关，待独立修正。
 - **剩余缺口**：cgroup v2 资源限额需部署级验证（本机 cgroup v1）；磁盘 quota、denylist、网络 allowlist 未实现并失败关闭；registry 仍在内存中，重启只删除孤儿 work root，不能恢复 sandbox id、租户绑定或文件内容；无动态 token 撤销 API；审计日志还不是不可变 audit backend；`serve` 只提供 HTTP listener，TLS 必须由 ingress/sidecar/service mesh 终止；Bwrap 是 namespace/container 级隔离。#193 不建议关闭，应继续跟踪完整生产平台化。
 
