@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-18（runtime-first AgentTeam 应用计划、M1 runtime application shell、M2 AgentTeam feature API、M3 React 工作区迁入与 M4 lifecycle 首片均已合入 `llm-harness-runtime` `main`；M3 PR #208 squash merge 为 `abcc837`，M4 lifecycle PR #211 merge commit 为 `7ebd724`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；#199 sandbox gateway 持久 registry / 重启连续性已通过 PR #210 合并 `main`（merge commit `ac3bafe`）；#202 remote sandbox filesystem policy hardening 已通过 PR #212 合并 `main`（merge commit `39244d3`，hardening commit `bed9e1e`）；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
+> 最后更新：2026-09-18（runtime-first AgentTeam 应用计划、M1 runtime application shell、M2 AgentTeam feature API、M3 React 工作区迁入与 M4 lifecycle 首片均已合入 `llm-harness-runtime` `main`；M3 PR #208 squash merge 为 `abcc837`，M4 lifecycle PR #211 merge commit 为 `7ebd724`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；#199 sandbox gateway 持久 registry / 重启连续性已通过 PR #210 合并 `main`（merge commit `ac3bafe`）；#202 remote sandbox filesystem policy hardening 已通过 PR #212 合并 `main`（merge commit `39244d3`，hardening commit `bed9e1e`）；#207 VM 级 sandbox 后端设计已通过 PR #213 合并 `main`（merge commit `01452b7`，设计 head `fe8358b`）；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1089,6 +1089,15 @@ model_check_feedback → calibration_report 全部通过。
 - **CI 事实**：PR 4 个 job 均因 GitHub 账号付款/支出额度问题在启动前失败，本地非 live 等价检查通过。
 - **剩余缺口**：runtime 数据根目录迁移、迁移报告、备份与回滚、真实 Windows 信号验证、桌面打包与生产级 hardening。
 
+### 2026-09-18 llm-harness-runtime AgentTeam 成员 persona/prompt API
+
+**仓库**：`llm-harness-runtime`；本地变更（未提交）。
+
+- **核心 API**：`IndividualSpec` 新增 `with_persona(persona)`、`with_prompt(prompt)` 与 `prompt()`；persona 会生成包含成员 id、专长与性格的独立 system prompt，生效优先级为显式完整 prompt > `configure(system_prompt)` > persona 生成 prompt。
+- **Studio 集成**：`agent-team-studio` 初始装配与成员 rebuild 均改用 `IndividualSpec::with_prompt(MemberSpec.persona)`，保留每成员 `prompts/*.md` 模板与现有热更新/持久化行为。
+- **回归测试**：新增 persona 生成成员专属 prompt、完整 prompt 覆盖与三级优先级、以及 build 后两个成员 system prompt 互不相同的团队级测试。
+- **验证**：本次改动 Rust 文件的 `rustfmt --check`、`cargo test -p llm-harness-agent --lib configured_system_prompt_reads_current_value`、`cargo test -p llm-harness-agent-team`（172 unit + 9 integration）、`cargo test -p llm-harness-agent-team-studio --lib assembles_team_with_explicit_model_and_fs`、`cargo test -p llm-harness-agent-team-studio --lib agent_config_`（7 tests）、`cargo clippy -p llm-harness-agent -p llm-harness-agent-team -p llm-harness-agent-team-studio --all-targets --all-features -- -D warnings` 通过。本机缺少 unversioned `libsqlite3.so`，测试/链接检查通过 `/lib64/libsqlite3.so.0` 临时 symlink + `LIBRARY_PATH` 完成；整仓 `cargo fmt --check` 当前被既有 `runtime-app/src/migration.rs` 未格式化改动阻塞，未修改该无关文件。
+
 ### 2026-09-16 senza-studio AgentTeam 成员与 issue 控制第二切片
 
 **仓库**：`senza-studio`；分支 `feat/agent-team-member-issues`（commit `5f89139`，单 commit，已推送，待开 PR）。
@@ -1130,6 +1139,18 @@ model_check_feedback → calibration_report 全部通过。
 - **平台语义**：Windows 路径分隔符转换集中在 `cfg(windows)`，POSIX 下保留字面反斜杠并拒绝；新增 shell/file、prefix sibling、symlink/traversal、POSIX backslash 与 mapped policy symlink 回归测试。
 - **验证**：`cargo fmt --all -- --check`、`cargo test -p llm-harness-sandbox --all-targets -- --include-ignored`、`cargo test -p llm-harness-sandbox-gateway --all-targets`、受影响 crate clippy `-D warnings`、`cargo test --workspace --exclude llm-harness-live-tests --all-targets` 与 `git diff --check` 通过；全量 live tests 因外部 LLM 环境不可用而排除，不影响本次改动。
 - **状态**：#202 已关闭；#193 继续保持 open，完整 Kimi/Firecracker 级 remote sandbox、cgroup v2 部署验证、磁盘 quota、网络 allowlist、动态 token 撤销与不可变审计仍未完成。
+
+### 2026-09-18 llm-harness-runtime VM sandbox backend design
+
+**仓库**：`llm-harness-runtime`；PR #213 已合并 `main`（merge commit `01452b7`，设计 head `fe8358b`，issue #207 的设计方向已确定，尚未实现 Firecracker 后端）。
+
+- **后端选型**：新增 `docs/design/2026-09-18-vm-sandbox-backend.md`，明确首个 VM 级后端选择 Firecracker；Bwrap 继续作为嵌入式 namespace 后端，Firecracker 面向高威胁多租户部署的硬件虚拟化边界。
+- **威胁模型**：区分 trusted gateway/KVM/signed image 与 untrusted guest workload；要求每 sandbox 独立 MicroVM、独立 ephemeral root/workspace、vsock 控制通道、宿主侧资源/网络/文件策略和生命周期清理。
+- **协议映射**：保留现有 HTTP/SSE 协议、错误映射、请求大小限制和输出上限；后端替换仅发生在 gateway 内部，`RemoteSandbox` / `RemoteEnv` 契约不变。
+- **实现切片**：文档拆为 backend abstraction、guest agent vsock 协议、Firecracker 生命周期、策略与限额、fake VM 测试、部署验证六步；PR #213 只完成第一步中的 `GatewaySandbox` 内部抽象，未开始 Firecracker 实现。
+- **代码改动**：`crates/llm-harness-sandbox-gateway/src/state.rs` 新增内部 `GatewaySandbox` 枚举并委托 `Sandbox` trait，移除 state 对 `BwrapSandbox` 的直接具体依赖，为后续 Firecracker variant 预留编译期扩展点。
+- **验证**：`cargo fmt --all -- --check`、`cargo test -p llm-harness-sandbox-gateway --all-targets`、`cargo clippy -p llm-harness-sandbox-gateway --all-targets -- -D warnings`、`cargo test --workspace --exclude llm-harness-live-tests --all-targets` 与 `git diff --check` 通过；live tests 因外部 LLM 环境不可用而排除，不影响本次改动。
+- **状态**：#193 继续保持 open；Firecracker guest agent、镜像/Jailer/网络策略、部署验证和审计闭环仍未实现。
 
 ### 2026-08-31 agent-team durable inbox journal
 
