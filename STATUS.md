@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-18（runtime-first AgentTeam 应用计划、M1 runtime application shell、M2 AgentTeam feature API、M3 React 工作区迁入与 M4 lifecycle 首片均已合入 `llm-harness-runtime` `main`；M3 PR #208 squash merge 为 `abcc837`，M4 lifecycle PR #211 merge commit 为 `7ebd724`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；#199 sandbox gateway 持久 registry / 重启连续性已通过 PR #210 合并 `main`（merge commit `ac3bafe`）；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
+> 最后更新：2026-09-18（runtime-first AgentTeam 应用计划、M1 runtime application shell、M2 AgentTeam feature API、M3 React 工作区迁入与 M4 lifecycle 首片均已合入 `llm-harness-runtime` `main`；M3 PR #208 squash merge 为 `abcc837`，M4 lifecycle PR #211 merge commit 为 `7ebd724`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；#199 sandbox gateway 持久 registry / 重启连续性已通过 PR #210 合并 `main`（merge commit `ac3bafe`）；#202 remote sandbox filesystem policy hardening 已通过 PR #212 合并 `main`（merge commit `39244d3`，hardening commit `bed9e1e`）；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1120,6 +1120,16 @@ model_check_feedback → calibration_report 全部通过。
 - **重启连续性**：创建先落 `creating` row，再暴露内存 registry；start 成功后落 `running`；删除先落 `deleting`，Bwrap work root 删除成功后才移除 row。重启时恢复有效 row 和文件内容、保留 owner 绑定与租户隔离，将 `creating/running` 归一为 `Running`；`deleting` row 恢复删除，无 row 的 UUID work root 作为孤儿清理，非 UUID/symlink/非目录、缺失 work root、未知 owner、当前 allowlist 不匹配或容量超限均拒绝启动。
 - **安全边界**：持久 owner 只用于按当前静态 principal 配置重建能力，不信任持久 token；恢复前重新执行 principal allowlist 校验、Bwrap policy 校验和 0700 work root 校验。Bwrap 命令仍使用 `--die-with-parent`，重启后的 `Running` 表示 work root 与配置可继续服务，不伪装存在常驻 VM 进程。
 - **验证**：新增真实 gateway 停止/重启测试，覆盖文件内容连续性、原 token 可访问、其他有效 token 404、delete 后 work root 与 DB row 均消失、孤儿清理、`deleting` 恢复、未知 owner 与缺失 work root fail-closed、损坏 SQLite 拒绝启动；gateway 集成 21/21 通过，workspace fmt/clippy `-D warnings`/非 live tests/`git diff --check` 全部通过。远端 GitHub Actions 因账户 billing/spending limit 未启动，已在 PR #210 记录；本次合并依据本地完整验证结果。
+
+### 2026-09-18 llm-harness-runtime remote sandbox filesystem policy hardening
+
+**仓库**：`llm-harness-runtime`；PR #212 已合并 `main`（merge commit `39244d3`，最终 hardening commit `bed9e1e`，docs commit `9a811a3`，issue #202 已关闭）。
+
+- **统一策略边界**：`build_sandbox_config` 现在把 `fs_allowlist` / `fs_denylist` 传入 Bwrap；文件 API 与 shell 都在同一 mapped policy 上执行，allowlist 用空 policy root 覆盖 `/workspace` 后只挂载允许子路径，denylist 用空目录或 `/dev/null` 覆盖拒绝路径。
+- **路径安全**：策略前缀匹配改为 `Path::starts_with`，避免 `/workspace/allow` 误匹配 `/workspace/allowed`；mapped policy path 逐组件拒绝 symlink，allowlist 只接受目录，denylist 只接受目录或 regular file，canonicalize 后强制落在 host work root 内，防止 Bwrap bind 跟随 symlink 逃逸。
+- **平台语义**：Windows 路径分隔符转换集中在 `cfg(windows)`，POSIX 下保留字面反斜杠并拒绝；新增 shell/file、prefix sibling、symlink/traversal、POSIX backslash 与 mapped policy symlink 回归测试。
+- **验证**：`cargo fmt --all -- --check`、`cargo test -p llm-harness-sandbox --all-targets -- --include-ignored`、`cargo test -p llm-harness-sandbox-gateway --all-targets`、受影响 crate clippy `-D warnings`、`cargo test --workspace --exclude llm-harness-live-tests --all-targets` 与 `git diff --check` 通过；全量 live tests 因外部 LLM 环境不可用而排除，不影响本次改动。
+- **状态**：#202 已关闭；#193 继续保持 open，完整 Kimi/Firecracker 级 remote sandbox、cgroup v2 部署验证、磁盘 quota、网络 allowlist、动态 token 撤销与不可变审计仍未完成。
 
 ### 2026-08-31 agent-team durable inbox journal
 
