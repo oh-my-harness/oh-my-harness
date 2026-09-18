@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-17（runtime-first AgentTeam 应用计划、M1 runtime application shell 与 M2 AgentTeam feature API 均已合入 `llm-harness-runtime` `main`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；#199 sandbox gateway 持久 registry / 重启连续性已实现并推送 `feat/sandbox-gateway-persistent-registry`（commit `fb9d80f`），待开 PR；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
+> 最后更新：2026-09-18（runtime-first AgentTeam 应用计划、M1 runtime application shell、M2 AgentTeam feature API 与 M3 React 工作区迁入均已合入 `llm-harness-runtime` `main`；M3 PR #208 squash merge 为 `abcc837`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；#199 sandbox gateway 持久 registry / 重启连续性已实现并推送 `feat/sandbox-gateway-persistent-registry`（commit `fb9d80f`），待开 PR；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1065,6 +1065,17 @@ model_check_feedback → calibration_report 全部通过。
 - **验证**：`cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo test -p llm-harness-agent-team-studio --all-targets`（129 unit + 11 integration，3 live ignored）、`cargo test -p llm-harness-runtime-app --all-targets`、`cargo test --workspace --all-features --exclude llm-harness-live-tests` 通过。
 - **CI 事实**：PR 远端三平台 check 未启动，GitHub annotation 明确为账户付款/支出额度问题，不是代码失败；本地已执行与 CI 等价的非 live 检查。
 - **剩余缺口**：React 工作区迁入 runtime 并切换新 API 前缀、Windows lifecycle、数据根目录迁移、桌面打包与生产级 hardening。
+
+### 2026-09-18 llm-harness-runtime AgentTeam React 工作区 M3
+
+**仓库**：`llm-harness-runtime`；PR [#208](https://github.com/oh-my-harness/llm-harness-runtime/pull/208) 已 squash merge 到 `main`（commit `abcc837`）。
+
+- **React 工作区**：已从 `senza-studio` 迁入 `crates/llm-harness-runtime-app/frontend`，前端统一调用 `/api/agent-team/*`；panel token 从 URL fragment 读入并保存在 `sessionStorage`，不写入 `localStorage`，WebSocket 事件流同样携带认证 token。
+- **嵌入与安全**：生产 Vite build 产物通过 `include_dir` 嵌入 Rust binary，由 `/app/agent-team` 提供；静态服务包含 MIME 白名单、路径穿越拒绝、CSP、`Cache-Control`、`nosniff`、`Referrer-Policy` 与 `X-Frame-Options`；`llm-harness-app` panel descriptor 指向 React 工作区，旧 `/app/team.html` 保留 fallback。
+- **测试与 CI**：新增 frontend lint、unit/API contract/event stream 测试、production build、提交产物一致性检查；Rust 集成测试覆盖 React 入口、嵌入资产、traversal 拒绝、descriptor 指向与旧面板 fallback。
+- **验证**：`npm run lint`、`npm test`（8/8）、`npm run build`、`npm audit`、`cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo test --workspace --all-features --exclude llm-harness-live-tests` 通过。
+- **CI 事实**：PR 远端 4 个 job 均在 runner 启动前失败且执行 0 step，本地等价非 live 检查全部通过；该失败与既有 Actions 付款/支出额度问题一致，不是代码回归。
+- **剩余缺口**：Windows lifecycle、runtime 数据根目录迁移、桌面打包、真实 UI E2E 与生产级 hardening。
 
 ### 2026-09-16 senza-studio AgentTeam 成员与 issue 控制第二切片
 
