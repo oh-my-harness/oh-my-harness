@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-18（runtime-first AgentTeam 应用计划、M1 runtime application shell、M2 AgentTeam feature API 与 M3 React 工作区迁入均已合入 `llm-harness-runtime` `main`；M3 PR #208 squash merge 为 `abcc837`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；#199 sandbox gateway 持久 registry / 重启连续性已实现并推送 `feat/sandbox-gateway-persistent-registry`（commit `fb9d80f`），待开 PR；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
+> 最后更新：2026-09-18（runtime-first AgentTeam 应用计划、M1 runtime application shell、M2 AgentTeam feature API 与 M3 React 工作区迁入均已合入 `llm-harness-runtime` `main`；M3 PR #208 squash merge 为 `abcc837`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；#199 sandbox gateway 持久 registry / 重启连续性已通过 PR #210 合并 `main`（merge commit `ac3bafe`）；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1098,16 +1098,16 @@ model_check_feedback → calibration_report 全部通过。
 - **崩溃恢复（第二阶段，`f3b9073`）**：gateway 使用绝对 canonical 0700 非 symlink work root（默认 `/tmp/llm-harness-sandbox-gateway`），其下 `sandboxes` 为 0700、`.gateway.lock` 为 0600 regular file；启动时以 `flock(LOCK_EX | LOCK_NB)` 拒绝双 gateway 共用 root，只回收 `sandboxes` 下 UUID 命名的直接子目录，非 UUID/symlink/非目录条目 fail-closed 保留给运维；孤儿目录内 symlink 不跟随删除，活动 bwrap 命令使用 `--die-with-parent`；`BwrapSandbox::new_owned` 在 canonicalize 前校验 symlink 与 0700，invalid create 不遗留 work root。
 - **合并与跟踪**：已在最新 `main` 上完成真实 merge 并重跑 `cargo fmt --check`、workspace clippy `-D warnings` 和非 live workspace tests；#193 保持 open 作为 umbrella issue，生产化后续已拆为 #199（持久 registry/重启连续性）、#200（cgroup v2 部署验证）、#201（磁盘 quota）、#202（fs denylist）、#203（网络 allowlist）、#204（token 轮换/撤销）、#205（不可变审计）、#206（TLS/部署 runbook）、#207（VM 级隔离后端）。
 - **验证**：`llm-harness-sandbox-remote` 27 个单元测试 + 13 个协议集成测试通过；第二阶段受影响 sandbox 测试 111 passed / 26 environment-ignored，gateway 16 个集成测试通过（认证、租户隔离、文件边界、默认断网、timeout、实时 abort、并发容量、temp cleanup、reset/delete、work-root lock/恢复/symlink/异常条目）；非 live workspace 测试、workspace clippy `-D warnings`、`cargo fmt --check` 和 `git diff --check` 通过。GLM-5.3-Flash 串行 live `agent_harness` 18/19 通过，唯一失败是 `auto_compact_triggers_on_threshold` 对模型输出长度的隐性依赖（该用例阈值 1150 token，短回答未触发），与本分支无关，待独立修正。
-- **剩余缺口**：cgroup v2 资源限额需部署级验证（本机 cgroup v1）；磁盘 quota、denylist、网络 allowlist 未实现并失败关闭；registry 仍在内存中，重启只删除孤儿 work root，不能恢复 sandbox id、租户绑定或文件内容；无动态 token 撤销 API；审计日志还不是不可变 audit backend；`serve` 只提供 HTTP listener，TLS 必须由 ingress/sidecar/service mesh 终止；Bwrap 是 namespace/container 级隔离。#193 不建议关闭，应继续跟踪完整生产平台化。
+- **剩余缺口**：cgroup v2 资源限额需部署级验证（本机 cgroup v1）；磁盘 quota、denylist、网络 allowlist 未实现并失败关闭；持久 registry / 重启连续性已由 #199（PR #210）完成；无动态 token 撤销 API；审计日志还不是不可变 audit backend；`serve` 只提供 HTTP listener，TLS 必须由 ingress/sidecar/service mesh 终止；Bwrap 是 namespace/container 级隔离。#193 不建议关闭，应继续跟踪完整生产平台化。
 
 ### 2026-09-17 llm-harness-runtime sandbox gateway persistent registry
 
-**仓库**：`llm-harness-runtime`；分支 `feat/sandbox-gateway-persistent-registry`（commit `fb9d80f`，已推送，待开 PR，对应 issue #199）。
+**仓库**：`llm-harness-runtime`；PR #210（commit `fb9d80f`）已合并 `main`（merge commit `ac3bafe`，issue #199 已自动关闭）。
 
 - **持久注册表**：gateway 在 work root 下使用 `registry.sqlite`（regular file、0600、WAL、`busy_timeout`、`synchronous=FULL`）记录 sandbox id、owner、原始 `RemoteSandboxConfig`、`creating/running/deleting` 状态和时间戳；schema 使用 application id / user version / 列结构校验，`quick_check` 失败或 JSON/config/state 无效均 fail-closed。
 - **重启连续性**：创建先落 `creating` row，再暴露内存 registry；start 成功后落 `running`；删除先落 `deleting`，Bwrap work root 删除成功后才移除 row。重启时恢复有效 row 和文件内容、保留 owner 绑定与租户隔离，将 `creating/running` 归一为 `Running`；`deleting` row 恢复删除，无 row 的 UUID work root 作为孤儿清理，非 UUID/symlink/非目录、缺失 work root、未知 owner、当前 allowlist 不匹配或容量超限均拒绝启动。
 - **安全边界**：持久 owner 只用于按当前静态 principal 配置重建能力，不信任持久 token；恢复前重新执行 principal allowlist 校验、Bwrap policy 校验和 0700 work root 校验。Bwrap 命令仍使用 `--die-with-parent`，重启后的 `Running` 表示 work root 与配置可继续服务，不伪装存在常驻 VM 进程。
-- **验证**：新增真实 gateway 停止/重启测试，覆盖文件内容连续性、原 token 可访问、其他有效 token 404、delete 后 work root 与 DB row 均消失、孤儿清理、`deleting` 恢复、未知 owner 与缺失 work root fail-closed、损坏 SQLite 拒绝启动；gateway 集成 21/21 通过，workspace fmt/clippy `-D warnings`/非 live tests/`git diff --check` 全部通过。
+- **验证**：新增真实 gateway 停止/重启测试，覆盖文件内容连续性、原 token 可访问、其他有效 token 404、delete 后 work root 与 DB row 均消失、孤儿清理、`deleting` 恢复、未知 owner 与缺失 work root fail-closed、损坏 SQLite 拒绝启动；gateway 集成 21/21 通过，workspace fmt/clippy `-D warnings`/非 live tests/`git diff --check` 全部通过。远端 GitHub Actions 因账户 billing/spending limit 未启动，已在 PR #210 记录；本次合并依据本地完整验证结果。
 
 ### 2026-08-31 agent-team durable inbox journal
 
