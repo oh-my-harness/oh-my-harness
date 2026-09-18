@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-18（runtime-first AgentTeam 应用计划、M1 runtime application shell、M2 AgentTeam feature API 与 M3 React 工作区迁入均已合入 `llm-harness-runtime` `main`；M3 PR #208 squash merge 为 `abcc837`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；#199 sandbox gateway 持久 registry / 重启连续性已通过 PR #210 合并 `main`（merge commit `ac3bafe`）；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
+> 最后更新：2026-09-18（runtime-first AgentTeam 应用计划、M1 runtime application shell、M2 AgentTeam feature API、M3 React 工作区迁入与 M4 lifecycle 首片均已合入 `llm-harness-runtime` `main`；M3 PR #208 squash merge 为 `abcc837`，M4 lifecycle PR #211 merge commit 为 `7ebd724`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；#199 sandbox gateway 持久 registry / 重启连续性已通过 PR #210 合并 `main`（merge commit `ac3bafe`）；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1076,6 +1076,18 @@ model_check_feedback → calibration_report 全部通过。
 - **验证**：`npm run lint`、`npm test`（8/8）、`npm run build`、`npm audit`、`cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo test --workspace --all-features --exclude llm-harness-live-tests` 通过。
 - **CI 事实**：PR 远端 4 个 job 均在 runner 启动前失败且执行 0 step，本地等价非 live 检查全部通过；该失败与既有 Actions 付款/支出额度问题一致，不是代码回归。
 - **剩余缺口**：Windows lifecycle、runtime 数据根目录迁移、桌面打包、真实 UI E2E 与生产级 hardening。
+
+### 2026-09-18 llm-harness-runtime runtime app lifecycle M4 首片
+
+**仓库**：`llm-harness-runtime`；PR [#211](https://github.com/oh-my-harness/llm-harness-runtime/pull/211) 已合并 `main`（merge commit `7ebd724`，单 commit `ec82399`）。
+
+- **生命周期配置**：`RUNTIME_APP_SHUTDOWN_TIMEOUT_SECS` 支持 1–3600 秒，默认 30 秒；零值、亚秒值或非法值以退出码 `2` 拒绝。
+- **跨平台信号**：Linux 覆盖 `CtrlC` 与 `SIGTERM`；Windows 覆盖 `CtrlC`、`CtrlBreak` 与 `CtrlClose`，`CtrlClose` 在系统 5 秒强杀窗口内保留日志和退出余量，实际 shutdown 预算上限为 4 秒。
+- **启动与退出语义**：信号 handler 在应用启动前安装；启动期收到信号记录 `shutdown_signal(startup_aborted=true)` 并以退出码 `130` 中止，`tokio::select!` 返回后再退出以触发 startup future 清理；运行期优雅退出带超时，超时记录 configured/effective timeout 并以退出码 `124` 退出。
+- **诊断与测试**：shutdown signal、timeout 与 normal shutdown 写入结构化 lifecycle JSONL；二进制集成测试覆盖 `SIGTERM` 事件、normal shutdown 与非法 timeout 配置。
+- **验证**：`cargo fmt --all -- --check`、`cargo test -p llm-harness-runtime-app --all-targets`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo test --workspace --all-features --exclude llm-harness-live-tests` 通过。
+- **CI 事实**：PR 4 个 job 均因 GitHub 账号付款/支出额度问题在启动前失败，本地非 live 等价检查通过。
+- **剩余缺口**：runtime 数据根目录迁移、迁移报告、备份与回滚、真实 Windows 信号验证、桌面打包与生产级 hardening。
 
 ### 2026-09-16 senza-studio AgentTeam 成员与 issue 控制第二切片
 
