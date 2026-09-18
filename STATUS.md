@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-14（Senza Studio local API auth 与 desktop host 迁移均已基于当前 PR 链路完成验证。）
+> 最后更新：2026-09-18（Runtime terminal-safe cancellation、Senza execution safety 集成与 Senza Studio Play execution safety 均已合入各自 `main`。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -977,6 +977,15 @@ model_check_feedback → calibration_report 全部通过。
 - **桌面诊断**：新增 `<userData>/logs/desktop.jsonl` 私有宿主诊断流，schema 为 `llm-harness.studio.desktop-lifecycle.v1`，记录 host / Agent Team / backend / Vite 生命周期事件；输出复用脱敏规则，文本 16KiB、单事件 64KiB、日志 1MiB 轮转并保留 10 份，Unix 0700/0600 权限并拒绝 logs 目录与 active log symlink，shutdown 时 flush/close。
 - **桌面验证**：基于 PR #9 后的 `main`，Python 435 tests + 1 skipped、SDK 22 symbol 兼容、`pip check`、`compileall`、Electron diagnostics/process/runtime host 19 tests + 1 skipped、真实 `agent-studio` 启停、生产前端构建、`npm audit --omit=dev` 0 漏洞、脚本/Node 语法、工作流 YAML 解析和 diff 检查均通过；GitHub Actions `Python validation` 与 `Frontend validation` 均成功。
 - **下一步**：继续补齐桌面 installer/打包、bundled Python、签名公证和 packaged E2E。当前桌面宿主已具备生产级进程生命周期与诊断基础，但分发链路仍是缺口。
+
+### 2026-09-18 execution safety 集成状态
+
+**范围**：`llm-harness-runtime` PR [#209](https://github.com/oh-my-harness/llm-harness-runtime/pull/209)、`Senza` PR [#40](https://github.com/oh-my-harness/Senza/pull/40)、`senza-studio` PR [#14](https://github.com/oh-my-harness/senza-studio/pull/14)。
+
+- **Runtime**：PR #209 已合入 `main`（merge commit `0d1552a`）；workflow terminal-safe cancellation、HITL 并发与 timeout 边界回归已进入主分支，`cargo fmt`、clippy 与 `llm-harness-workflow` 全量测试通过。
+- **Senza**：PR #40 已合入 `main`（commit `1f934fd`）；集成 terminal-safe workflow cancellation，覆盖恢复/边界/并发场景 13 项回归测试，Rust、Ruff 与 pytest 验证通过。
+- **Studio Play**：PR #14 已合入 `main`（merge commit `f0e5ccb`），新增全局执行保护（75 steps / 15 分钟 active execution time）并补齐 workflow cancel 与 HITL 并发测试；随后在 `main` 追加 rapid-resume epoch 修复 `8bebf40`，避免旧 run 线程/timeout 清理新 execution segment。
+- **Studio 验证**：Python 全量 `521 passed, 1 skipped`、Play 回归 `118 passed`、前端测试 `32 passed, 1 skipped`、生产构建与 `npm audit --omit=dev` 均通过；`8bebf40` 首次 Windows packaged E2E 偶发失败，空提交 `e2d8e6b` 重跑同一代码树后 Python/Frontend/Windows packaging and packaged E2E 全部成功；本地 Linux AppImage packaged E2E 连续 3 次通过。
 
 ### 2026-08-31 agent-team durable inbox journal
 
