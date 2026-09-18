@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-14（Senza Studio local API auth 与 desktop host 迁移均已基于当前 PR 链路完成验证。）
+> 最后更新：2026-09-18（runtime-first AgentTeam 应用计划、M1 runtime application shell、M2 AgentTeam feature API 与 M3 React 工作区迁入均已合入 `llm-harness-runtime` `main`；M3 PR #208 squash merge 为 `abcc837`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；#199 sandbox gateway 持久 registry / 重启连续性已实现并推送 `feat/sandbox-gateway-persistent-registry`（commit `fb9d80f`），待开 PR；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -964,6 +964,15 @@ model_check_feedback → calibration_report 全部通过。
 - **验证**：本地 Python 161/161 通过、22 个 Senza symbol 兼容检查通过、`pip check` 通过；前端干净安装、build 与生产依赖审计通过（0 vulnerabilities），`bash -n`、`node --check`、`git diff --check` 通过。另在干净 worktree 中从锁定 commit 构建出 `senza_sdk-1.2.3` wheel，装入全新 Python 3.12 venv 后复跑全量 Python 验证，结果仍为 161/161、22 symbol 无漂移、`pip check` 通过。
 - **后续状态**：PR #4 已合入 `main`，GitHub Actions 已启用，最新 `main` CI 成功（run `34303852251`）；issue [#5](https://github.com/oh-my-harness/senza-studio/issues/5) 已按完成关闭。
 
+### 2026-09-15 llm-harness-runtime AgentTeam GLM E2E
+
+**仓库**：`llm-harness-runtime`；分支 `feat/agent-team-glm-e2e`（基于 `main` `1aa9237`，待提交/待 PR）。
+
+- **HTTPS 根因**：Hyperop 内网 GLM 网关使用本机系统 CA；`reqwest` 原先只启用 rustls WebPKI roots，导致 provider TLS 校验失败。workspace `reqwest` 增加 `rustls-tls-native-roots` feature。
+- **真实 E2E**：新增默认 ignored 的 `glm_5_3_flash_agent_team_delegates_coding_review_to_operator`，强制 `GLM-5.3-Flash`，并验证 operator → planner `delegate_task` → coder `delegate_task` → reviewer `send_message` → operator 的三跳闭环。
+- **防误判**：测试读取各成员 session transcript，断言三段目标工具调用各且仅发生一次，并校验 reviewer payload 与最终 operator 消息，避免把跳过成员、纯文本回复或错误目标当作通过。
+- **验证事实**：4096-token/temperature-0 配置下三跳链路连续两次真实完成，完整断言版最新通过（54.02s）；`26_agent_team` 三个场景在 HTTPS 下全部通过，其中 reflection 按模型判断合法弃权，未持久化 lesson，因此不宣称 reflection E2E 已验证。
+
 ### 2026-09-14 senza-studio 后续集成状态
 
 **仓库**：`senza-studio`；`main` 已推进到 `3df6ba1`，PR #3/#4/#6/#8/#9 均已合入。
@@ -977,6 +986,128 @@ model_check_feedback → calibration_report 全部通过。
 - **桌面诊断**：新增 `<userData>/logs/desktop.jsonl` 私有宿主诊断流，schema 为 `llm-harness.studio.desktop-lifecycle.v1`，记录 host / Agent Team / backend / Vite 生命周期事件；输出复用脱敏规则，文本 16KiB、单事件 64KiB、日志 1MiB 轮转并保留 10 份，Unix 0700/0600 权限并拒绝 logs 目录与 active log symlink，shutdown 时 flush/close。
 - **桌面验证**：基于 PR #9 后的 `main`，Python 435 tests + 1 skipped、SDK 22 symbol 兼容、`pip check`、`compileall`、Electron diagnostics/process/runtime host 19 tests + 1 skipped、真实 `agent-studio` 启停、生产前端构建、`npm audit --omit=dev` 0 漏洞、脚本/Node 语法、工作流 YAML 解析和 diff 检查均通过；GitHub Actions `Python validation` 与 `Frontend validation` 均成功。
 - **下一步**：继续补齐桌面 installer/打包、bundled Python、签名公证和 packaged E2E。当前桌面宿主已具备生产级进程生命周期与诊断基础，但分发链路仍是缺口。
+
+### 2026-09-15 senza-studio 桌面打包链路
+
+**仓库**：`senza-studio`；PR [#10](https://github.com/oh-my-harness/senza-studio/pull/10) 已合并 `main`（commit `ad207f1`，单 commit）；配套 runtime 分支 `feat/studio-desktop-host`（commit `7af9f8e`，已推送）。
+
+- **Linux 打包**：新增 `scripts/package-desktop.sh linux`，构建生产前端与 Python backend，打包桌面资源和 AppImage；AppImage 包含 desktop metadata 与 1024×1024 icon。
+- **Python runtime**：升级到 python-build-standalone `20260901` / Python `3.12.14`；Linux archive 已实际下载并校验，四个平台 URL/SHA256 均与 GitHub Release asset metadata 一致（其中 Windows SHA 修正为上游值）。
+- **端口与下载**：默认优先 `7878`，占用时自动选择可用端口，显式 `SENZA_STUDIO_PORT` 仍强制使用且非法值 fail-fast；dev Vite proxy 跟随动态端口。Python runtime 下载增加 connect/max-time/low-speed/retry，Electron cache 显式继承用户环境。
+- **进程生命周期**：桌面 backend / Vite / AgentTeam 子进程继承 Electron 宿主进程组，外部 SIGTERM 进程组信号可清理全部子进程；应用自身正常退出仍走 `before-quit` 的逐进程 graceful stop。Packaged Xvfb E2E 验证外部 SIGTERM 后 backend 与 `agent-studio` 无泄漏。
+- **Runtime 交付**：packaged `agent-studio` 使用 bundled SQLite，去掉对宿主 `libsqlite3` 的运行时依赖；Agent Team 相关 targeted tests 通过。
+- **打包验证**：完整 Linux packaging 通过，packaged Xvfb E2E 通过；前端 Vitest 30 passed，Python pytest 440 passed / 1 skipped，`npm audit --omit=dev` 0 vulnerabilities，`git diff --check` 通过；PR #10 远端 Python/Frontend CI 均成功。
+- **打包卫生**：拒绝 Python bytecode 与 `__pycache__` 进入发布产物，打包后的应用不携带开发源码树。
+- **跨平台边界**：Linux 分发链路已达到当前验证目标；macOS/Windows 仍缺 native signing、notarization 和 packaged E2E，不能声明生产级跨平台完成。
+
+### 2026-09-16 senza-studio Windows 桌面打包闭环
+
+**仓库**：`senza-studio`；issue [#11](https://github.com/oh-my-harness/senza-studio/issues/11) 已关闭；PR [#12](https://github.com/oh-my-harness/senza-studio/pull/12) 已按单 commit 合并 `main`（commit `04da48c`）。
+
+- **Windows 构建**：`scripts/package-desktop.sh win` 在原生 Windows x86_64 上构建 NSIS installer，输出稳定命名 `senza-studio-<version>-win-x64.exe` 与 `.sha256` checksum；打包前固定并校验 Agent Team runtime commit（`b572bde`）。
+- **签名链路**：Windows release/tag 构建强制要求 `WINDOWS_CSC_LINK`、`WINDOWS_CSC_KEY_PASSWORD` 与 `WINDOWS_CERTIFICATE_THUMBPRINT` secrets，执行 Authenticode SHA-256 签名并用 `Get-AuthenticodeSignature` 验证 signer；非 tag CI 使用临时自签证书覆盖同一构建/验证路径。
+- **资源完整性**：新增 `desktop-resources.v1` 扩展 manifest，记录 Agent Team、Python executable、backend entrypoint、frontend bundle 与 Python runtime archive checksum；安装后 E2E 会重新校验这些资源。
+- **Packaged E2E**：Windows 原生 CI 静默安装真实 NSIS installer，启动真实桌面应用，验证 public health、静态 UI/private API 认证、生产 asset 加载、AgentTeam descriptor、Python user-site 隔离、AgentTeam 崩溃后 supervisor 重启、graceful shutdown 诊断、外部强杀后的进程树清理与卸载。
+- **CI 与合并状态**：PR #12 / `main` commit `04da48c` 上 Python validation、Frontend validation、Windows packaging and packaged E2E 均成功；PR 与 issue 已自动关闭，远端功能分支已清理。
+- **当前边界**：Linux 与 Windows 打包验证链路均已闭环；macOS 仍缺 native signing、notarization 与 packaged E2E，不能声明三平台全部分发生产级完成。
+
+### 2026-09-16 senza-studio AgentTeam React 工作区第一切片
+
+**仓库**：`senza-studio`；PR [#13](https://github.com/oh-my-harness/senza-studio/pull/13) 已按单 commit squash 合并 `main`（commit `ae4c8e4`）。
+
+- **前端工作区**：新增 Agent Teams 首页入口和 React 工作区，支持 runtime 模型/API key/base URL/scout 间隔设置、团队创建、列表、选择、重启、删除、成员 pulse、待处理消息/issue/timer 汇总、事件流和向指定成员发送消息；浏览器只访问 Senza backend proxy，不接触 runtime token。
+- **事件流**：新增 `/ws/team` 客户端封装，包含 JSON 事件校验、自动重连、状态展示和 50 条事件上限；测试覆盖合法/非法事件、重连和关闭后不再重连。
+- **真实契约**：扩展真实 `agent-studio` contract test，覆盖 runtime settings、创建团队、项目列表、pulse、chat、重启、删除和最终清空；避免只验证 proxy 转发。
+- **桌面宿主**：SIGTERM/SIGINT 转为 Electron graceful quit；关闭时先销毁主窗口以断开 UI WebSocket，抑制 shutdown 中的 `window-all-closed` 重入，等待 backend/Vite/AgentTeam 全部停止后记录 `shutdown-stopped` 并 flush diagnostics。
+- **Packaged E2E**：Linux 使用私有 Xvfb 启动真实 AppImage，并通过 CDP 驱动真实 React UI：打开 Agent Teams、保存 runtime 设置、创建团队、选择 planner、发送消息、验证 `/ws/team` 与 operator 事件、重启团队、二次启动验证持久化、再次发送消息并删除团队；同时覆盖 public health、静态 UI/private API 认证、Studio token 只进入 backend、AgentTeam 不接收 Studio token、进程树清理和完整 lifecycle 事件。
+- **Runtime pin**：`packaging/agent-team-runtime.json` 更新到已推送的 `6c61407`，使用包含 restart 修复的 release `agent-studio` 构建产物。
+- **Windows 兼容**：桌面宿主使用 `getattr(os, "O_NONBLOCK", 0)` 处理平台差异，避免在缺少 `os.O_NONBLOCK` 的 Windows Python runtime 上失败。
+- **验证**：Linux AppImage packaging 通过；前端 build + Vitest 33 passed；真实 packaged desktop E2E passed；全量 Python pytest 441 passed / 1 skipped；release runtime contract test 1 passed；`git diff --check` 通过。
+- **CI 与合并状态**：PR #13 / `main` commit `ae4c8e4` 上 Frontend validation、Python validation、Windows packaging 与 packaged Windows E2E 全部成功；远端功能分支已清理。
+- **剩余缺口**：Agent 成员配置/历史/issue 操作、文件授权选择器和 runtime debug panel 的完整 feature parity；issue #1 不能关闭。
+
+### 2026-09-16 llm-harness-runtime LoopConfig 生产级修复
+
+**仓库**：`llm-harness-runtime`；PR [#196](https://github.com/oh-my-harness/llm-harness-runtime/pull/196)，分支 `fix/loop-config-retry-jump`，远端 head `efef3dd`。
+
+- **审查结论**：两个原始问题均真实可复现——`target_stage == 当前步骤` 时 `To(self)` 不计入 LoopConfig，最终落入 `max_steps`；`To`/`Retry` 续环耗尽或跳转后崩溃，Running 恢复会被原始 transition 覆盖 `current_step`，导致已退出/目标循环被重跑。
+- **修复**：自环 `To(self)` 计为 continuation；`StepRecord.transition` 持久化引擎实际执行的 effective transition，覆盖 exit target / target stage；LoopConfig 持久化前释放 workflow state 锁，避免持锁 await I/O；同步修正自环注释与 transition 契约说明。
+- **回归测试**：新增自环计数、`To` exit route 崩溃恢复、`Retry -> target_stage` 崩溃恢复三条测试。
+- **Live 稳定性补充**：OpenAI/Anthropic smoke 与 tool-error 测试读取事件前显式 `settle()`，消除 `EventCapture` 后台 drain 竞态；auto-compaction 测试加入确定性 context padding，使触发阈值不依赖模型输出 token 波动。
+- **验证**：`cargo fmt --all --check`、`cargo clippy -p llm-harness-live-tests --all-targets --all-features -- -D warnings`、`cargo test -p llm-harness-workflow --all-features`、`cargo test --workspace --exclude llm-harness-live-tests` 通过。真实 LLM 使用 GLM-5.3-Flash 复验 OpenAI smoke、tool-error propagation、auto-compaction threshold 均通过；此前 full live 95/98 通过，非 Anthropic 失败已确认由输出非确定性/测试假设导致并复跑或修复，剩余两例 Anthropic 失败为本机 CA 链与 API 403 环境问题，非 PR 回归。
+
+### 2026-09-16 llm-harness-runtime runtime-first AgentTeam 应用计划
+
+**仓库**：`llm-harness-runtime`；分支 `docs/runtime-first-agent-team-app-plan`（基于 `origin/main` `b572bde`，单 commit，待评审/PR）。
+
+- **方向调整**：`llm-harness-runtime` 将提供 first-party 本地应用入口，AgentTeam 作为 runtime 应用内置 feature module；`senza-studio` 不再作为 AgentTeam 能力所有者，只在过渡期作为兼容消费者或通用 shell。
+- **计划文档**：新增 `docs/design/2026-09-16-runtime-first-agent-team-app-plan.md`，覆盖当前能力/缺口、目标架构、crate 演进、API 兼容、React UI 迁移、Tauri/系统 WebView 桌面策略、数据迁移、安全、生命周期、测试与发布判定。
+- **实施顺序**：M0 契约冻结 → M1 runtime application shell → M2 AgentTeam feature module 化 → M3 React 工作区迁入 → M4 Windows lifecycle 与数据迁移 → M5 桌面打包 → M6 生产级 hardening。
+- **事实结论**：现有 `agent-team-studio` 已具备后端、认证、持久化、恢复、诊断和 Unix host supervisor 基础，可以增量演进；但入口、通用 app crate、React UI 归属、Windows lifecycle、桌面打包和数据迁移仍未闭环，当前不能宣称生产级应用。
+- **验证**：`cargo fmt --all -- --check`、`cargo clippy --all-targets --all-features -- -D warnings`、`cargo test --workspace --exclude llm-harness-live-tests` 通过；完整 workspace 测试在本机先因缺少 sqlite 开发链接符号失败，使用真实 `/lib64/libsqlite3.so.0` 临时链接后，`llm-harness-live-tests` 因当前环境未配置 provider 返回空响应而失败，非文档变更引入。
+
+### 2026-09-16 llm-harness-runtime runtime application shell M1
+
+**仓库**：`llm-harness-runtime`；已合入 `main`（commit `90fbf56`）。
+
+- **应用入口**：新增 `llm-harness-runtime-app` crate 与 `llm-harness-app` binary；`RuntimeAppConfig` 支持 `RUNTIME_APP_DATA_ROOT` / `RUNTIME_APP_PORT`，并回退到既有 `STUDIO_DATA_ROOT` / `STUDIO_PORT`，避免破坏现有部署。
+- **App API**：新增 `/api/app/health` 与 `/api/app/diagnostics`；health 基于最新 startup recovery 事件返回 `ok` / `degraded`，diagnostics 返回最近 lifecycle JSONL 事件，均复用 Inspector 本地认证。
+- **扩展点**：`StudioConfig::with_extra_routes` 允许上层应用向既有 Studio 服务注入路由，`StudioRuntime` 在 Inspector mount 前合并 app routes，保持 `agent-studio` 与 `/api/team/*` 完全兼容。
+- **验证**：`cargo fmt --all -- --check`、`cargo clippy -p llm-harness-runtime-app -p llm-harness-agent-team-studio --all-targets --all-features -- -D warnings`、`cargo test -p llm-harness-runtime-app --all-targets`（2/2）、`cargo test -p llm-harness-agent-team-studio --all-targets`（128 unit + 11 integration，3 live ignored）通过。
+- **剩余缺口**：React 工作区迁入 runtime、Windows lifecycle、数据根目录迁移、Tauri/系统 WebView 桌面打包与生产级 hardening。
+
+### 2026-09-16 llm-harness-runtime AgentTeam feature API M2
+
+**仓库**：`llm-harness-runtime`；PR [#198](https://github.com/oh-my-harness/llm-harness-runtime/pull/198) 已 squash merge 到 `main`（commit `ea84c5a`）。
+
+- **Feature API**：`/api/agent-team/*` 成为 runtime app 内的 AgentTeam 前缀，复用与 `/api/team/*` 完全相同的 handlers；旧路径继续作为兼容 alias，避免破坏现有面板和外部消费者。
+- **应用健康**：`/api/app/health` 新增 `feature_health.agent-team`，输出 feature 级 `ok` / `degraded` 与启动恢复摘要，保留顶层 `startup_recovery` 兼容字段。
+- **验证**：`cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo test -p llm-harness-agent-team-studio --all-targets`（129 unit + 11 integration，3 live ignored）、`cargo test -p llm-harness-runtime-app --all-targets`、`cargo test --workspace --all-features --exclude llm-harness-live-tests` 通过。
+- **CI 事实**：PR 远端三平台 check 未启动，GitHub annotation 明确为账户付款/支出额度问题，不是代码失败；本地已执行与 CI 等价的非 live 检查。
+- **剩余缺口**：React 工作区迁入 runtime 并切换新 API 前缀、Windows lifecycle、数据根目录迁移、桌面打包与生产级 hardening。
+
+### 2026-09-18 llm-harness-runtime AgentTeam React 工作区 M3
+
+**仓库**：`llm-harness-runtime`；PR [#208](https://github.com/oh-my-harness/llm-harness-runtime/pull/208) 已 squash merge 到 `main`（commit `abcc837`）。
+
+- **React 工作区**：已从 `senza-studio` 迁入 `crates/llm-harness-runtime-app/frontend`，前端统一调用 `/api/agent-team/*`；panel token 从 URL fragment 读入并保存在 `sessionStorage`，不写入 `localStorage`，WebSocket 事件流同样携带认证 token。
+- **嵌入与安全**：生产 Vite build 产物通过 `include_dir` 嵌入 Rust binary，由 `/app/agent-team` 提供；静态服务包含 MIME 白名单、路径穿越拒绝、CSP、`Cache-Control`、`nosniff`、`Referrer-Policy` 与 `X-Frame-Options`；`llm-harness-app` panel descriptor 指向 React 工作区，旧 `/app/team.html` 保留 fallback。
+- **测试与 CI**：新增 frontend lint、unit/API contract/event stream 测试、production build、提交产物一致性检查；Rust 集成测试覆盖 React 入口、嵌入资产、traversal 拒绝、descriptor 指向与旧面板 fallback。
+- **验证**：`npm run lint`、`npm test`（8/8）、`npm run build`、`npm audit`、`cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets --all-features -- -D warnings`、`cargo test --workspace --all-features --exclude llm-harness-live-tests` 通过。
+- **CI 事实**：PR 远端 4 个 job 均在 runner 启动前失败且执行 0 step，本地等价非 live 检查全部通过；该失败与既有 Actions 付款/支出额度问题一致，不是代码回归。
+- **剩余缺口**：Windows lifecycle、runtime 数据根目录迁移、桌面打包、真实 UI E2E 与生产级 hardening。
+
+### 2026-09-16 senza-studio AgentTeam 成员与 issue 控制第二切片
+
+**仓库**：`senza-studio`；分支 `feat/agent-team-member-issues`（commit `5f89139`，单 commit，已推送，待开 PR）。
+
+- **Issue 操作**：React 工作区新增 issue 列表、状态展示、确认和拒绝操作；通过 Senza backend proxy 调用 runtime local API，确认/拒绝后的列表与 pulse 会刷新，409 等错误保留给操作者。
+- **成员详情**：新增成员配置投影、persona/model/base URL/API key 覆盖、会话历史展示和手动刷新；成员 API key 只提交不回显，会话历史每 5 秒刷新。
+- **竞态防护**：团队/成员切换时使用当前选择守卫和成员请求版本号，防止旧 pulse、issue 或成员详情响应覆盖新选择；配置加载不会轮询覆盖未保存输入。
+- **验证**：前端 build + Vitest 37 passed / 1 skipped；真实 runtime contract 1 passed；全量 Python pytest 443 passed / 1 skipped；最终代码 Linux AppImage packaging 通过。
+- **E2E 边界**：packaged E2E 已扩展成员配置保存、会话历史和 issue 面板断言；本开发机缺少 `Xvfb`，本地无法执行真实桌面 E2E，需依赖 CI 的 Linux Xvfb 路径。 Electron 31 `--ozone-platform=headless` 在 AppImage 路径下仍尝试 X11，不能作为替代验证。
+
+### 2026-09-15 llm-harness-runtime remote sandbox backend
+
+**仓库**：`llm-harness-runtime`；`feat/remote-sandbox-backend`（commits `99cfac5` + `f3b9073`）已合并 `main`（merge commit `238fc21`，issue #193）。
+
+- **生产边界**：新增 `llm-harness-sandbox-remote`，定位为远程 sandbox 的 HTTPS/Bearer 协议客户端与 `Sandbox` / `ExecutionEnv` 适配器；新增 `llm-harness-sandbox-gateway` 作为 Linux Bwrap 第一阶段后端。它不是 Firecracker/Kata/gVisor VM 级隔离平台，也不包含完整多租户调度、镜像管理、网络策略执行或持久化实例恢复。
+- **协议能力**：实现 JSON 控制面、文件操作、SSE 流式 shell、kill/reset/delete/cleanup、错误映射、响应大小上限和精确成功状态码校验；SSE 支持 LF/CRLF/CR 且 CRLF 可跨网络 chunk 分割；HTTP client 禁用 redirect 和环境代理，Content-Type 按大小写不敏感的 media type 严格解析；`RemoteSandboxClientConfig` 的 token `Debug` 输出脱敏，非 loopback HTTP 拒绝，IPv6 loopback HTTP 可用于本机测试；HTTPS 使用 rustls native roots，可注入企业私有 CA；客户端会把 shell timeout 限制在 `max_exec_timeout` 内，未显式请求超时时使用该上限，低于 1ms 的协议 timeout 会被拒绝。
+- **安全防护**：guest path 统一要求 UTF-8 绝对路径并拒绝 `.` / `..` / NUL；校验 sandbox id、execution id、work_dir、backend、状态响应身份、文件元数据路径、目录条目归属和临时目录归属；`ExecutionEnv` 文件请求支持在途取消，shell 支持 timeout、abort 和输出上限；无效 create 响应会尽力删除已创建的远端实例；`RemoteEnv` 与 sandbox handle 共享远端资源所有权，最后一个引用 drop 时用独立 cleanup 线程尽力删除，`shutdown` 成功只删除一次。
+- **Bwrap gateway**：Bearer 使用 SHA-256 digest 和常数时间比较；sandbox 记录绑定 principal，跨租户访问返回 404；gateway 生成独立 0700 work root 并拒绝 caller `work_dir`；文件操作走 `cap-std` capability 边界，shell 走 `bwrap --unshare-all` 且默认断网；SSE 立即返回 execution id 并后台执行，使实时 kill/abort 可用；创建容量检查持锁完成，temp dir/cleanup 统一在 `work_dir/.tmp` 且走沙箱互斥与 capability 边界；reset/delete/cleanup/kill 生命周期、有界 SSE/JSON body、timeout/output 上限和结构化日志已实现；`fs_denylist`、非空 `net_allowlist`、`max_disk_mb` 和无法执行的 cgroup v2 限额均失败关闭。
+- **崩溃恢复（第二阶段，`f3b9073`）**：gateway 使用绝对 canonical 0700 非 symlink work root（默认 `/tmp/llm-harness-sandbox-gateway`），其下 `sandboxes` 为 0700、`.gateway.lock` 为 0600 regular file；启动时以 `flock(LOCK_EX | LOCK_NB)` 拒绝双 gateway 共用 root，只回收 `sandboxes` 下 UUID 命名的直接子目录，非 UUID/symlink/非目录条目 fail-closed 保留给运维；孤儿目录内 symlink 不跟随删除，活动 bwrap 命令使用 `--die-with-parent`；`BwrapSandbox::new_owned` 在 canonicalize 前校验 symlink 与 0700，invalid create 不遗留 work root。
+- **合并与跟踪**：已在最新 `main` 上完成真实 merge 并重跑 `cargo fmt --check`、workspace clippy `-D warnings` 和非 live workspace tests；#193 保持 open 作为 umbrella issue，生产化后续已拆为 #199（持久 registry/重启连续性）、#200（cgroup v2 部署验证）、#201（磁盘 quota）、#202（fs denylist）、#203（网络 allowlist）、#204（token 轮换/撤销）、#205（不可变审计）、#206（TLS/部署 runbook）、#207（VM 级隔离后端）。
+- **验证**：`llm-harness-sandbox-remote` 27 个单元测试 + 13 个协议集成测试通过；第二阶段受影响 sandbox 测试 111 passed / 26 environment-ignored，gateway 16 个集成测试通过（认证、租户隔离、文件边界、默认断网、timeout、实时 abort、并发容量、temp cleanup、reset/delete、work-root lock/恢复/symlink/异常条目）；非 live workspace 测试、workspace clippy `-D warnings`、`cargo fmt --check` 和 `git diff --check` 通过。GLM-5.3-Flash 串行 live `agent_harness` 18/19 通过，唯一失败是 `auto_compact_triggers_on_threshold` 对模型输出长度的隐性依赖（该用例阈值 1150 token，短回答未触发），与本分支无关，待独立修正。
+- **剩余缺口**：cgroup v2 资源限额需部署级验证（本机 cgroup v1）；磁盘 quota、denylist、网络 allowlist 未实现并失败关闭；registry 仍在内存中，重启只删除孤儿 work root，不能恢复 sandbox id、租户绑定或文件内容；无动态 token 撤销 API；审计日志还不是不可变 audit backend；`serve` 只提供 HTTP listener，TLS 必须由 ingress/sidecar/service mesh 终止；Bwrap 是 namespace/container 级隔离。#193 不建议关闭，应继续跟踪完整生产平台化。
+
+### 2026-09-17 llm-harness-runtime sandbox gateway persistent registry
+
+**仓库**：`llm-harness-runtime`；分支 `feat/sandbox-gateway-persistent-registry`（commit `fb9d80f`，已推送，待开 PR，对应 issue #199）。
+
+- **持久注册表**：gateway 在 work root 下使用 `registry.sqlite`（regular file、0600、WAL、`busy_timeout`、`synchronous=FULL`）记录 sandbox id、owner、原始 `RemoteSandboxConfig`、`creating/running/deleting` 状态和时间戳；schema 使用 application id / user version / 列结构校验，`quick_check` 失败或 JSON/config/state 无效均 fail-closed。
+- **重启连续性**：创建先落 `creating` row，再暴露内存 registry；start 成功后落 `running`；删除先落 `deleting`，Bwrap work root 删除成功后才移除 row。重启时恢复有效 row 和文件内容、保留 owner 绑定与租户隔离，将 `creating/running` 归一为 `Running`；`deleting` row 恢复删除，无 row 的 UUID work root 作为孤儿清理，非 UUID/symlink/非目录、缺失 work root、未知 owner、当前 allowlist 不匹配或容量超限均拒绝启动。
+- **安全边界**：持久 owner 只用于按当前静态 principal 配置重建能力，不信任持久 token；恢复前重新执行 principal allowlist 校验、Bwrap policy 校验和 0700 work root 校验。Bwrap 命令仍使用 `--die-with-parent`，重启后的 `Running` 表示 work root 与配置可继续服务，不伪装存在常驻 VM 进程。
+- **验证**：新增真实 gateway 停止/重启测试，覆盖文件内容连续性、原 token 可访问、其他有效 token 404、delete 后 work root 与 DB row 均消失、孤儿清理、`deleting` 恢复、未知 owner 与缺失 work root fail-closed、损坏 SQLite 拒绝启动；gateway 集成 21/21 通过，workspace fmt/clippy `-D warnings`/非 live tests/`git diff --check` 全部通过。
 
 ### 2026-08-31 agent-team durable inbox journal
 
