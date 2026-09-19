@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-19（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport 与 AF_VSOCK transport 均已合并；VM guest agent request-response service PR #220 已创建待复审；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送：runtime 分支 `feat/agent-team-member-management` 功能 commit `cfe5d7c`、文档 commit `188f182`，SenzaStudio `main` commits `1c9b7d0` + `8360872`；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
+> 最后更新：2026-09-19（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport、AF_VSOCK transport 与 request-response service 均已合并；Linux guest workspace filesystem handler PR #221 已创建待复审；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送：runtime 分支 `feat/agent-team-member-management` 功能 commit `cfe5d7c`、文档 commit `188f182`，SenzaStudio `main` commits `1c9b7d0` + `8360872`；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1217,13 +1217,24 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-19 llm-harness-runtime VM guest agent request-response service
 
-**仓库**：`llm-harness-runtime`；PR #220 已创建待复审（分支 `feat/vm-agent-service`，commit `2a50f34`，refs #193）。
+**仓库**：`llm-harness-runtime`；PR #220 已合并 `main`（merge commit `695e6ae`，功能 commit `2a50f34`，UTF-8 安全截断修复 commit `6d7abd2`，refs #193）。
 
 - **Service 切片**：新增 transport-independent `llm-harness-vm-agent-service` crate；`GuestAgentService` 基于任意 `FrameStream<ProtocolPeer::Guest>` 串行分发 host request 到 async handler，并用同一 wire request ID 构造 guest response。
 - **Fail-closed 边界**：`StartProcess` / `CancelProcess` 返回稳定 `unsupported_operation` 错误且保持连接可用，避免伪装完成进程事件流；handler 错误消息经 NUL 清理与 4 KiB 截断，handler 返回错误方向消息时连接终止。
 - **Transport 加固**：新增 `Frame::into_message`，`FrameStream` 在半帧中途收到 EOF 时返回 `ClosedDuringPartialFrame`，不再把未完成帧误判为 clean close。
 - **验证**：protocol 11 项、transport 12 项、service 6 项测试与 doc tests 通过；三个 crate Clippy、workspace Clippy `-D warnings`、可达 workspace tests（排除本机缺 SQLite dev library 的 5 个链接受限包）、`cargo fmt --check` 与 `git diff --check` 通过。
-- **状态**：PR #220 待复审合并；该切片不包含文件 handler 实现、进程事件多路复用、Firecracker lifecycle、镜像/Jailer/网络策略或部署验证。#193 继续保持 open。
+- **状态**：PR #220 已合并；该切片不包含具体文件 handler 实现、进程事件多路复用、Firecracker lifecycle、镜像/Jailer/网络策略或部署验证。#193 继续保持 open。
+
+### 2026-09-19 llm-harness-runtime VM guest agent workspace filesystem handler
+
+**仓库**：`llm-harness-runtime`；PR #221 已创建待复审（分支 `feat/vm-agent-filesystem-handler`，commit `bd4ac7c`，refs #193）。
+
+- **Linux handler**：新增 `WorkspaceFileHandler` 作为 `GuestAgentHandler` 的具体实现，支持 text/binary 读写追加、metadata、根目录与嵌套目录 listing、exists、目录创建、remove、tracked temp dir 与 cleanup；`Ping` / `Status` 可用，process operations 继续 fail-closed unsupported。
+- **路径安全**：workspace root 使用 `O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC`；组件解析优先 Linux `openat2` 的 `RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS | RESOLVE_NO_XDEV`，若内核/沙箱返回 `ENOSYS` 则回退到 normalized `openat + O_NOFOLLOW` 单组件解析。final file 与 metadata 均拒绝 symlink。
+- **资源边界**：路径 4096 bytes / 256 components；text 8 MiB、binary 32 MiB；目录 listing 10,000 entries 且 entry path 总量 8 MiB；temp prefix 128 bytes；递归删除 128 层。读写只接受 regular file，并用 `O_NONBLOCK` + pre/post `fstat` 拒绝 FIFO/device 等特殊文件。
+- **Cleanup 语义**：handler 只记录自身创建的 temp dir，`Cleanup` 仅递归删除 tracked paths，不清空整个 workspace，且 workspace root 不可删除。
+- **验证**：service crate 13 项测试、crate Clippy `-D warnings`、可达 workspace tests 与 workspace Clippy `-D warnings` 通过；本机因缺失 SQLite 与 D-Bus 开发库排除 6 个系统依赖受限 crate。测试覆盖 root/nested listing、text/binary I/O、metadata、exists、recursive remove、tracked cleanup、parent/final symlink、FIFO 与 request-response 集成。
+- **状态**：PR #221 待复审；该切片仍不包含 process manager/process event multiplexer、Firecracker lifecycle、镜像/Jailer/网络策略、`RemoteSandbox` / `RemoteEnv` 端到端集成或部署验证。#193 继续保持 open。
 
 ### 2026-08-31 agent-team durable inbox journal
 
