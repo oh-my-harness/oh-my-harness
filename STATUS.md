@@ -1097,7 +1097,7 @@ model_check_feedback → calibration_report 全部通过。
 - **共享事件**：`/api/team/events` WebSocket 回放并直播 `team_message` 与 `agent_thought`；`team_message` 覆盖 operator→member、operator→team、member→member，团队广播按 `broadcast_id` 去重。`agent_thought` 仅用于操作员可见过程流，不注入其它成员模型上下文。
 - **Studio UI**：SenzaStudio 采用三栏工作区：左侧成员新增/编辑/删除，中间共享聊天与思考流，右侧状态与其它事件；成员 ID 只读，persona、role label、model、toolkits 可编辑，消息可选择指定成员或 `team`。后端继续只做 HTTP/WS proxy，浏览器不接触 runtime token。
 - **验证**：runtime `cargo test -p llm-harness-agent-team`、`cargo test -p llm-harness-agent-team-studio --lib` 与相关 clippy `-D warnings` 通过；真实 runtime contract 覆盖成员增删改、direct message、team broadcast、事件流与重启删除。SenzaStudio 前端 Vitest 33/33 与双入口 build 通过；当前 venv 全量 Python 测试 528/529 通过，唯一失败是既有 vendoring 用例因该临时 venv 缺 `build`/`setuptools` 无法构建 wheel，与本次改动无关。
-- **集成状态**：`packaging/agent-team-runtime.json` pin 已修正为功能 commit 完整 SHA `cfe5d7cf040b24f04ebbbdaecfa1be40c796993b`。debug runtime 已验证；如需发布桌面包，仍需按 packaging 流程基于该 pin 重建 release `agent-studio`。
+- **集成状态**：`packaging/agent-team-runtime.json` pin 已修正为功能 commit 完整 SHA `cfe5d7cf040b24f04ebbbdaecfa1be40c796993b`，并在干净临时仓库验证 `git fetch <full-sha>` 可直接拉取。debug runtime 已验证；如需发布桌面包，仍需按 packaging 流程基于该 pin 重建 release `agent-studio`。
 
 ### 2026-09-18 llm-harness-runtime AgentTeam 成员 persona/prompt API
 
