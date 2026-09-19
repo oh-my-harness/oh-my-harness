@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-19（VM guest agent frame transport 与 AF_VSOCK transport 均已合并；VM guest agent request-response service PR #220 已创建待复审；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送：runtime 分支 `feat/agent-team-member-management` 功能 commit `cfe5d7c`、文档 commit `188f182`，SenzaStudio `main` commits `1c9b7d0` + `8360872`；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M4 与 remote sandbox #193 相关合并状态见下文对应章节。）
+> 最后更新：2026-09-19（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport 与 AF_VSOCK transport 均已合并；VM guest agent request-response service PR #220 已创建待复审；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送：runtime 分支 `feat/agent-team-member-management` 功能 commit `cfe5d7c`、文档 commit `188f182`，SenzaStudio `main` commits `1c9b7d0` + `8360872`；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1173,6 +1173,16 @@ model_check_feedback → calibration_report 全部通过。
 - **生产防御**：拒绝嵌套 source/destination/backup、symlink、根路径、unsupported entry、已存在目标/备份与运行中的数据根；journal/destination lock 防并发，report/journal Unix `0600`，复制与关键 rename 后执行 fsync；Windows data-root lock 使用 `FILE_SHARE_DELETE` 以兼容目录 rename。
 - **验证**：PR commit 通过 `cargo fmt --all -- --check`、`git diff --check`、`cargo test -p llm-harness-runtime-app --all-targets`、workspace Clippy `-D warnings` 与全 workspace tests（排除 live tests）；合并后 main 分支二进制启动/健康检查/SIGTERM 优雅退出集成测试复跑通过。
 - **边界**：Windows 真机信号、rename、锁与目录元数据落盘验证仍待完成；迁移/回滚尚未接入桌面 UI；runtime App 当前可在 browser mode 使用，桌面打包仍是 M5。
+
+### 2026-09-19 llm-harness-runtime App Tauri desktop shell M5
+
+**仓库**：`llm-harness-runtime`；PR [#218](https://github.com/oh-my-harness/llm-harness-runtime/pull/218) 已合并 `main`（merge commit `9688200`，功能 commit `3ea8f32`）。
+
+- **桌面壳**：新增 `llm-harness-runtime-app-shell` Tauri 2 crate；shell 启动 sibling `llm-harness-app`、等待 stdout descriptor、读取 `panel.json` 并用系统 WebView 打开 React 面板。未显式设置数据根目录时，shell 使用 Tauri 平台级 AppData 目录传给 core，避免 Windows 安装目录或工作目录落盘。
+- **启动/退出边界**：descriptor 路径必须等于 `<data-root>/panel.json`，panel URL 必须是 HTTP loopback IP；启动与窗口创建期间处理关闭请求，避免 core 残留或退出码竞态。Unix 使用 `SIGTERM`，Windows 将 core 放入 new process group 并发送 `CTRL_BREAK_EVENT`，超时后强制 kill。
+- **打包**：workspace SQLite 使用 bundled；Windows 脚本构建 core、stage target-triple sidecar，并固定 Tauri CLI `2.11.4` 生成 MSI/NSIS；CI Linux job 补齐 Tauri 系统依赖。
+- **验证**：最终 PR 通过 `cargo fmt --all -- --check`、`git diff --check`、workflow YAML 解析、`cargo test -p llm-harness-runtime-app --all-targets`（29 tests）、core app Clippy `-D warnings`，并在独立最小 crate 中运行新增 descriptor path / URL 防御单测（2 tests）。PR 作者已验证 Windows release 冒烟、MSI/NSIS 生成、ctrl_break 优雅退出与 core 无残留。本机 Linux shell 编译被 CentOS 缺 GUI devel 包阻断，Windows cross-check 被本机旧版 `llvm-rc` 阻断，均非代码失败；最终远端 CI 已触发。
+- **边界**：clean Windows machine 安装包 E2E、Linux artifact、macOS 支持策略、安装/卸载/诊断收集、更新流程与桌面内迁移编排仍未完成，M5 尚不能宣称生产级分发闭环。
 
 ### 2026-09-19 llm-harness-runtime VM guest agent wire protocol
 
