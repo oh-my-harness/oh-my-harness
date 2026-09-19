@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-19（AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送：runtime 分支 `feat/agent-team-member-management` 功能 commit `cfe5d7c`、文档 commit `188f182`，SenzaStudio `main` commit `1c9b7d0`；runtime-first AgentTeam M1–M4 与 remote sandbox #193 相关合并状态见下文对应章节。）
+> 最后更新：2026-09-19（VM guest agent frame transport 已提交 PR #217；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送：runtime 分支 `feat/agent-team-member-management` 功能 commit `cfe5d7c`、文档 commit `188f182`，SenzaStudio `main` commit `1c9b7d0`；runtime-first AgentTeam M1–M4 与 remote sandbox #193 相关合并状态见下文对应章节。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1174,14 +1174,24 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-19 llm-harness-runtime VM guest agent wire protocol
 
-**仓库**：`llm-harness-runtime`；PR #215 open（分支 `feat/vm-agent-protocol`，commit `e9195d5`，refs #193）。
+**仓库**：`llm-harness-runtime`；PR #215 已合并 `main`（merge commit `fd0546f`，功能 commit `e9195d5`，refs #193）。
 
 - **协议切片**：新增 transport-independent `llm-harness-vm-agent-protocol` crate，覆盖 liveness/status、workspace 文件操作、进程启动/stdout/stderr/exit/timeout/error/cancel 与 cleanup；不依赖 HTTP、vsock transport 或 runtime 上层，便于同一定义复用于 gateway 与 guest agent。
 - **Fail-closed 帧协议**：20-byte header 使用 magic/version/reserved/payload length/request id；解码器先校验声明长度再分配 payload，支持半包/粘包，拒绝 oversized、invalid header、unknown message、unknown field、非法路径、非法 base64、零 timeout/output limit 与跨 peer 方向消息。
 - **方向与宽度**：host 只能发起控制请求，guest 只能发起响应和进程事件；wire 上的计数与字节上限使用 `u32`/`u64`，避免 32/64 位 guest 的 `usize` 漂移。
 - **流式输出**：stdout/stderr 以 bounded chunk 流式传输，exit/timeout 只携带 exit code 与截断计数，由 gateway 聚合输出以保持现有 `RemoteSandbox` 语义，避免最终帧重复携带大输出。
 - **验证**：crate 11 项测试、crate Clippy `-D warnings`、非 live workspace tests、workspace Clippy `-D warnings`、`cargo fmt --all -- --check` 与 `git diff --check` 通过；crates.io 证书链异常时使用仓库既有 `--offline` 验证路径。
-- **状态**：PR #215 待 review；该切片只完成 guest agent 协议，不包含 vsock transport、guest agent 实现、Firecracker lifecycle、镜像/Jailer/网络策略或部署验证。#193 继续保持 open。
+- **状态**：PR #215 已合并；该切片只完成 guest agent 协议，不包含 vsock transport、guest agent 实现、Firecracker lifecycle、镜像/Jailer/网络策略或部署验证。#193 继续保持 open。
+
+### 2026-09-19 llm-harness-runtime VM guest agent frame transport
+
+**仓库**：`llm-harness-runtime`；PR #217 open（分支 `feat/vm-agent-transport`，commit `5699b2d`，refs #193）。
+
+- **传输切片**：新增 transport-independent `llm-harness-vm-agent-transport` crate；`FrameStream` 可运行在任意 `AsyncRead + AsyncWrite + Unpin` 双工字节流上，复用 #215 协议解码器，不把 framing 逻辑绑定到 vsock。
+- **方向与上限**：出站 frame 必须来源于本端 peer，入站 decoder 只接受对端 peer；同一 payload limit 同时约束编码与解码，oversize header 在分配 payload 前被拒绝。
+- **流式语义**：支持半包、粘包与多帧缓冲；clean close 后先排空已解码 pending frames 再返回 `Closed`；`close` 只关闭写半边，`get_ref` / `get_mut` / `into_inner` 保留底层流给后续 adapter。
+- **验证**：transport 6 项、protocol 11 项测试通过；transport Clippy、workspace Clippy `-D warnings`、可达 workspace tests（排除本机缺 SQLite dev library 的 5 个链接受限包）、`cargo fmt --check` 与 `git diff --check` 通过。
+- **状态**：PR #217 待 review；本切片不包含 AF_VSOCK adapter、guest agent 实现、Firecracker lifecycle、镜像/Jailer/网络策略或部署验证。#193 继续保持 open。
 
 ### 2026-08-31 agent-team durable inbox journal
 
