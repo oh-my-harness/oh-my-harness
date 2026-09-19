@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-19（VM guest agent frame transport 与 AF_VSOCK transport 均已合并；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送：runtime 分支 `feat/agent-team-member-management` 功能 commit `cfe5d7c`、文档 commit `188f182`，SenzaStudio `main` commits `1c9b7d0` + `8360872`；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M4 与 remote sandbox #193 相关合并状态见下文对应章节。）
+> 最后更新：2026-09-19（VM guest agent frame transport 与 AF_VSOCK transport 均已合并；VM guest agent request-response service PR #220 已创建待复审；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送：runtime 分支 `feat/agent-team-member-management` 功能 commit `cfe5d7c`、文档 commit `188f182`，SenzaStudio `main` commits `1c9b7d0` + `8360872`；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M4 与 remote sandbox #193 相关合并状态见下文对应章节。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1204,6 +1204,16 @@ model_check_feedback → calibration_report 全部通过。
 - **协议复用**：`VsockStream` 实现 `AsyncRead` / `AsyncWrite`，可直接交给 #217 的 `FrameStream`，不在 adapter 内重复 framing、方向校验或 payload limit。
 - **验证**：transport 11 项测试、doc tests、transport Clippy、workspace Clippy `-D warnings`、可达 workspace tests（排除本机缺 SQLite dev library 的 5 个链接受限包）、`cargo fmt --check` 与 `git diff --check` 通过；Linux 测试用真实 Unix socket pair/listener 覆盖 AsyncFd I/O 路径。
 - **状态**：PR #219 已合并；本机可创建 AF_VSOCK socket 但无 vsock loopback/Firecracker guest，真实 host-guest 连接验证仍待 Firecracker integration slice。#193 继续保持 open。
+
+### 2026-09-19 llm-harness-runtime VM guest agent request-response service
+
+**仓库**：`llm-harness-runtime`；PR #220 已创建待复审（分支 `feat/vm-agent-service`，commit `2a50f34`，refs #193）。
+
+- **Service 切片**：新增 transport-independent `llm-harness-vm-agent-service` crate；`GuestAgentService` 基于任意 `FrameStream<ProtocolPeer::Guest>` 串行分发 host request 到 async handler，并用同一 wire request ID 构造 guest response。
+- **Fail-closed 边界**：`StartProcess` / `CancelProcess` 返回稳定 `unsupported_operation` 错误且保持连接可用，避免伪装完成进程事件流；handler 错误消息经 NUL 清理与 4 KiB 截断，handler 返回错误方向消息时连接终止。
+- **Transport 加固**：新增 `Frame::into_message`，`FrameStream` 在半帧中途收到 EOF 时返回 `ClosedDuringPartialFrame`，不再把未完成帧误判为 clean close。
+- **验证**：protocol 11 项、transport 12 项、service 6 项测试与 doc tests 通过；三个 crate Clippy、workspace Clippy `-D warnings`、可达 workspace tests（排除本机缺 SQLite dev library 的 5 个链接受限包）、`cargo fmt --check` 与 `git diff --check` 通过。
+- **状态**：PR #220 待复审合并；该切片不包含文件 handler 实现、进程事件多路复用、Firecracker lifecycle、镜像/Jailer/网络策略或部署验证。#193 继续保持 open。
 
 ### 2026-08-31 agent-team durable inbox journal
 
