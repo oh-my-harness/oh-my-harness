@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-19（runtime-first AgentTeam 应用计划、M1 runtime application shell、M2 AgentTeam feature API、M3 React 工作区迁入、M4 lifecycle 与数据迁移控制面均已合入 `llm-harness-runtime` `main`；M3 PR #208 squash merge 为 `abcc837`，M4 lifecycle PR #211 merge commit 为 `7ebd724`，M4 数据迁移 PR #214 merge commit 为 `66bf489`、功能 commit 为 `6fac48f`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；#199 sandbox gateway 持久 registry / 重启连续性已通过 PR #210 合并 `main`（merge commit `ac3bafe`）；#202 remote sandbox filesystem policy hardening 已通过 PR #212 合并 `main`（merge commit `39244d3`，hardening commit `bed9e1e`）；#207 VM 级 sandbox 后端设计已通过 PR #213 合并 `main`（merge commit `01452b7`，设计 head `fe8358b`）；VM guest-agent wire protocol PR #215 已推送并待 review；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
+> 最后更新：2026-09-19（AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送：runtime 分支 `feat/agent-team-member-management` 功能 commit `cfe5d7c`、文档 commit `188f182`，SenzaStudio `main` commit `1c9b7d0`；runtime-first AgentTeam M1–M4 与 remote sandbox #193 相关合并状态见下文对应章节。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1089,9 +1089,19 @@ model_check_feedback → calibration_report 全部通过。
 - **CI 事实**：PR 4 个 job 均因 GitHub 账号付款/支出额度问题在启动前失败，本地非 live 等价检查通过。
 - **剩余缺口**：runtime 数据根目录迁移、迁移报告、备份与回滚、真实 Windows 信号验证、桌面打包与生产级 hardening。
 
+### 2026-09-19 AgentTeam 成员管理与 SenzaStudio 协作工作区
+
+**仓库**：`llm-harness-runtime` / `senza-studio`；runtime 分支 `feat/agent-team-member-management`（功能 commit `cfe5d7c`，文档 commit `188f182`），SenzaStudio `main` commit `1c9b7d0`。
+
+- **成员管理**：runtime 暴露成员 persona / explicit prompt API，支持动态新增与删除成员；新成员与既有成员建立双向 contact，删除会停止 runner、更新观测状态并持久化 `team.json`。`POST /api/team/chat` 支持 `target="team"` 广播给全部成员。
+- **共享事件**：`/api/team/events` WebSocket 回放并直播 `team_message` 与 `agent_thought`；`team_message` 覆盖 operator→member、operator→team、member→member，团队广播按 `broadcast_id` 去重。`agent_thought` 仅用于操作员可见过程流，不注入其它成员模型上下文。
+- **Studio UI**：SenzaStudio 采用三栏工作区：左侧成员新增/编辑/删除，中间共享聊天与思考流，右侧状态与其它事件；成员 ID 只读，persona、role label、model、toolkits 可编辑，消息可选择指定成员或 `team`。后端继续只做 HTTP/WS proxy，浏览器不接触 runtime token。
+- **验证**：runtime `cargo test -p llm-harness-agent-team`、`cargo test -p llm-harness-agent-team-studio --lib` 与相关 clippy `-D warnings` 通过；真实 runtime contract 覆盖成员增删改、direct message、team broadcast、事件流与重启删除。SenzaStudio 前端 Vitest 33/33 与双入口 build 通过；当前 venv 全量 Python 测试 528/529 通过，唯一失败是既有 vendoring 用例因该临时 venv 缺 `build`/`setuptools` 无法构建 wheel，与本次改动无关。
+- **集成状态**：`packaging/agent-team-runtime.json` pin 已修正为功能 commit 完整 SHA `cfe5d7cf040b24f04ebbbdaecfa1be40c796993b`。debug runtime 已验证；如需发布桌面包，仍需按 packaging 流程基于该 pin 重建 release `agent-studio`。
+
 ### 2026-09-18 llm-harness-runtime AgentTeam 成员 persona/prompt API
 
-**仓库**：`llm-harness-runtime`；本地变更（未提交）。
+**仓库**：`llm-harness-runtime`；分支 `feat/agent-team-member-management` 已推送（该能力包含在 commit `cfe5d7c`）。
 
 - **核心 API**：`IndividualSpec` 新增 `with_persona(persona)`、`with_prompt(prompt)` 与 `prompt()`；persona 会生成包含成员 id、专长与性格的独立 system prompt，生效优先级为显式完整 prompt > `configure(system_prompt)` > persona 生成 prompt。
 - **Studio 集成**：`agent-team-studio` 初始装配与成员 rebuild 均改用 `IndividualSpec::with_prompt(MemberSpec.persona)`，保留每成员 `prompts/*.md` 模板与现有热更新/持久化行为。
