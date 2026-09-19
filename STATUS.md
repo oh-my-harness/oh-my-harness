@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-19（VM guest agent frame transport 与 AF_VSOCK transport 均已合并；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送：runtime 分支 `feat/agent-team-member-management` 功能 commit `cfe5d7c`、文档 commit `188f182`，SenzaStudio `main` commit `1c9b7d0`；runtime-first AgentTeam M1–M4 与 remote sandbox #193 相关合并状态见下文对应章节。）
+> 最后更新：2026-09-19（VM guest agent frame transport 与 AF_VSOCK transport 均已合并；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送：runtime 分支 `feat/agent-team-member-management` 功能 commit `cfe5d7c`、文档 commit `188f182`，SenzaStudio `main` commits `1c9b7d0` + `8360872`；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M4 与 remote sandbox #193 相关合并状态见下文对应章节。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1091,13 +1091,15 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-19 AgentTeam 成员管理与 SenzaStudio 协作工作区
 
-**仓库**：`llm-harness-runtime` / `senza-studio`；runtime 分支 `feat/agent-team-member-management`（功能 commit `cfe5d7c`，文档 commit `188f182`），SenzaStudio `main` commit `1c9b7d0`。
+**仓库**：`llm-harness-runtime` / `senza-studio`；runtime 分支 `feat/agent-team-member-management`（功能 commit `cfe5d7c`，文档 commit `188f182`），SenzaStudio `main` commits `1c9b7d0` + `8360872`。
 
 - **成员管理**：runtime 暴露成员 persona / explicit prompt API，支持动态新增与删除成员；新成员与既有成员建立双向 contact，删除会停止 runner、更新观测状态并持久化 `team.json`。`POST /api/team/chat` 支持 `target="team"` 广播给全部成员。
 - **共享事件**：`/api/team/events` WebSocket 回放并直播 `team_message` 与 `agent_thought`；`team_message` 覆盖 operator→member、operator→team、member→member，团队广播按 `broadcast_id` 去重。`agent_thought` 仅用于操作员可见过程流，不注入其它成员模型上下文。
 - **Studio UI**：SenzaStudio 采用三栏工作区：左侧成员新增/编辑/删除，中间共享聊天与思考流，右侧状态与其它事件；成员 ID 只读，persona、role label、model、toolkits 可编辑，消息可选择指定成员或 `team`。后端继续只做 HTTP/WS proxy，浏览器不接触 runtime token。
 - **验证**：runtime `cargo test -p llm-harness-agent-team`、`cargo test -p llm-harness-agent-team-studio --lib` 与相关 clippy `-D warnings` 通过；真实 runtime contract 覆盖成员增删改、direct message、team broadcast、事件流与重启删除。SenzaStudio 前端 Vitest 33/33 与双入口 build 通过；当前 venv 全量 Python 测试 528/529 通过，唯一失败是既有 vendoring 用例因该临时 venv 缺 `build`/`setuptools` 无法构建 wheel，与本次改动无关。
-- **集成状态**：`packaging/agent-team-runtime.json` pin 已修正为功能 commit 完整 SHA `cfe5d7cf040b24f04ebbbdaecfa1be40c796993b`，并在干净临时仓库验证 `git fetch <full-sha>` 可直接拉取。debug runtime 已验证；如需发布桌面包，仍需按 packaging 流程基于该 pin 重建 release `agent-studio`。
+- **集成状态**：`packaging/agent-team-runtime.json` pin 已修正为功能 commit 完整 SHA `cfe5d7cf040b24f04ebbbdaecfa1be40c796993b`，并在干净临时仓库验证 `git fetch <full-sha>` 可直接拉取。release `agent-studio` 已基于该 pin 构建，SHA256 为 `d6f59b3c96e126148937fb014b7565643b7b53b35c66179cebe0730bdfc361fa`。
+- **桌面交付**：Linux AppImage `senza-studio-0.1.0-linux-x86_64.AppImage` 已生成，SHA256 为 `b7a651ed9f8d7fed5c2d83e4764f2f851ca37580ec6f6d18c51d91745dc91fe6`；bundled `agent-studio` 与 release 二进制哈希一致，`desktop-resources.json` 记录的 `agent_team_sha256` 已校验。
+- **Packaged E2E**：真实 AppImage 桌面链路通过，覆盖 AppImage 启动、backend health、静态 UI / private API 认证、runtime settings 保存、团队创建、成员 pulse、`/ws/team` 连接、共享聊天回显、团队重启与删除。测试已适配三栏共享聊天 UI，commit `8360872`；打包下载需系统 CA（本机 `SENZA_STUDIO_CACERT=/etc/pki/tls/certs/ca-bundle.crt`）。
 
 ### 2026-09-18 llm-harness-runtime AgentTeam 成员 persona/prompt API
 
