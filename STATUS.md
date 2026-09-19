@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-18（runtime-first AgentTeam 应用计划、M1 runtime application shell、M2 AgentTeam feature API、M3 React 工作区迁入与 M4 lifecycle 首片均已合入 `llm-harness-runtime` `main`；M3 PR #208 squash merge 为 `abcc837`，M4 lifecycle PR #211 merge commit 为 `7ebd724`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；#199 sandbox gateway 持久 registry / 重启连续性已通过 PR #210 合并 `main`（merge commit `ac3bafe`）；#202 remote sandbox filesystem policy hardening 已通过 PR #212 合并 `main`（merge commit `39244d3`，hardening commit `bed9e1e`）；#207 VM 级 sandbox 后端设计已通过 PR #213 合并 `main`（merge commit `01452b7`，设计 head `fe8358b`）；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
+> 最后更新：2026-09-19（runtime-first AgentTeam 应用计划、M1 runtime application shell、M2 AgentTeam feature API、M3 React 工作区迁入、M4 lifecycle 与数据迁移控制面均已合入 `llm-harness-runtime` `main`；M3 PR #208 squash merge 为 `abcc837`，M4 lifecycle PR #211 merge commit 为 `7ebd724`，M4 数据迁移 PR #214 merge commit 为 `66bf489`、功能 commit 为 `6fac48f`；remote sandbox issue #193 协议客户端 + Linux Bwrap gateway 两阶段已合并 `main`（merge commit `238fc21`），后续生产化拆分为 #199–#207；#199 sandbox gateway 持久 registry / 重启连续性已通过 PR #210 合并 `main`（merge commit `ac3bafe`）；#202 remote sandbox filesystem policy hardening 已通过 PR #212 合并 `main`（merge commit `39244d3`，hardening commit `bed9e1e`）；#207 VM 级 sandbox 后端设计已通过 PR #213 合并 `main`（merge commit `01452b7`，设计 head `fe8358b`）；`llm-harness-runtime` PR #196 LoopConfig 崩溃恢复修复已更新；Senza Studio 成员配置/会话历史/issue 操作第二切片已推送 `feat/agent-team-member-issues`，待开 PR。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1151,6 +1151,16 @@ model_check_feedback → calibration_report 全部通过。
 - **代码改动**：`crates/llm-harness-sandbox-gateway/src/state.rs` 新增内部 `GatewaySandbox` 枚举并委托 `Sandbox` trait，移除 state 对 `BwrapSandbox` 的直接具体依赖，为后续 Firecracker variant 预留编译期扩展点。
 - **验证**：`cargo fmt --all -- --check`、`cargo test -p llm-harness-sandbox-gateway --all-targets`、`cargo clippy -p llm-harness-sandbox-gateway --all-targets -- -D warnings`、`cargo test --workspace --exclude llm-harness-live-tests --all-targets` 与 `git diff --check` 通过；live tests 因外部 LLM 环境不可用而排除，不影响本次改动。
 - **状态**：#193 继续保持 open；Firecracker guest agent、镜像/Jailer/网络策略、部署验证和审计闭环仍未实现。
+
+### 2026-09-19 llm-harness-runtime App 数据迁移控制面
+
+**仓库**：`llm-harness-runtime`；PR #214 已合并 `main`（merge commit `66bf489`，功能 commit `6fac48f`）。
+
+- **CLI 控制面**：`llm-harness-app migrate-data --from SOURCE --to DESTINATION [--backup BACKUP]` 先完整复制 staging 并写入私有 report/journal，再执行 source→backup、staging→destination 的 durable rename；`rollback-data` 恢复原数据根，并将迁移后变更的目标目录保留到独立 sibling 目录。
+- **恢复语义**：journal 覆盖 Prepared、SourceRenamed、Completed、RolledBack 与 rollback 中断点；重复执行同一命令可恢复提交、补写 rollback report 或清理 rolled-back staging，不会误续提交。
+- **生产防御**：拒绝嵌套 source/destination/backup、symlink、根路径、unsupported entry、已存在目标/备份与运行中的数据根；journal/destination lock 防并发，report/journal Unix `0600`，复制与关键 rename 后执行 fsync；Windows data-root lock 使用 `FILE_SHARE_DELETE` 以兼容目录 rename。
+- **验证**：PR commit 通过 `cargo fmt --all -- --check`、`git diff --check`、`cargo test -p llm-harness-runtime-app --all-targets`、workspace Clippy `-D warnings` 与全 workspace tests（排除 live tests）；合并后 main 分支二进制启动/健康检查/SIGTERM 优雅退出集成测试复跑通过。
+- **边界**：Windows 真机信号、rename、锁与目录元数据落盘验证仍待完成；迁移/回滚尚未接入桌面 UI；runtime App 当前可在 browser mode 使用，桌面打包仍是 M5。
 
 ### 2026-08-31 agent-team durable inbox journal
 
