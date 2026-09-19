@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-19（VM guest agent frame transport 已合并，AF_VSOCK transport 已提交 PR #219；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送：runtime 分支 `feat/agent-team-member-management` 功能 commit `cfe5d7c`、文档 commit `188f182`，SenzaStudio `main` commit `1c9b7d0`；runtime-first AgentTeam M1–M4 与 remote sandbox #193 相关合并状态见下文对应章节。）
+> 最后更新：2026-09-19（VM guest agent frame transport 与 AF_VSOCK transport 均已合并；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送：runtime 分支 `feat/agent-team-member-management` 功能 commit `cfe5d7c`、文档 commit `188f182`，SenzaStudio `main` commit `1c9b7d0`；runtime-first AgentTeam M1–M4 与 remote sandbox #193 相关合并状态见下文对应章节。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1195,13 +1195,13 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-19 llm-harness-runtime VM guest agent AF_VSOCK transport
 
-**仓库**：`llm-harness-runtime`；PR #219 open（分支 `feat/vm-agent-vsock-transport`，commit `010c0d6`，refs #193）。
+**仓库**：`llm-harness-runtime`；PR #219 已合并 `main`（merge commit `2d570e7`，功能 commit `010c0d6`，refs #193）。
 
 - **Linux adapter**：新增 `llm_harness_vm_agent_transport::vsock`，提供 `VsockStream` / `VsockListener`；通过 `socket2` 创建 `AF_VSOCK` / `SOCK_STREAM` socket，并用 Tokio `AsyncFd` 处理非blocking connect、accept、read、write 与 readiness 重试。
 - **地址策略**：端口必须非零；`VMADDR_CID_ANY` 允许 guest listener bind，但 host connect 明确拒绝；accepted peer 必须是 AF_VSOCK 地址，否则 fail closed。
 - **协议复用**：`VsockStream` 实现 `AsyncRead` / `AsyncWrite`，可直接交给 #217 的 `FrameStream`，不在 adapter 内重复 framing、方向校验或 payload limit。
 - **验证**：transport 11 项测试、doc tests、transport Clippy、workspace Clippy `-D warnings`、可达 workspace tests（排除本机缺 SQLite dev library 的 5 个链接受限包）、`cargo fmt --check` 与 `git diff --check` 通过；Linux 测试用真实 Unix socket pair/listener 覆盖 AsyncFd I/O 路径。
-- **状态**：PR #219 待 review；本机可创建 AF_VSOCK socket 但无 vsock loopback/Firecracker guest，真实 host-guest 连接验证仍待 Firecracker integration slice。#193 继续保持 open。
+- **状态**：PR #219 已合并；本机可创建 AF_VSOCK socket 但无 vsock loopback/Firecracker guest，真实 host-guest 连接验证仍待 Firecracker integration slice。#193 继续保持 open。
 
 ### 2026-08-31 agent-team durable inbox journal
 
