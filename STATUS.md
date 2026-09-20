@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-19（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport、AF_VSOCK transport 与 request-response service 均已合并；Linux guest workspace filesystem handler PR #221 已创建待复审；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送：runtime 分支 `feat/agent-team-member-management` 功能 commit `cfe5d7c`、文档 commit `188f182`，SenzaStudio `main` commits `1c9b7d0` + `8360872`；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
+> 最后更新：2026-09-20（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport、AF_VSOCK transport、request-response service 与 Linux guest workspace filesystem handler PR #221 均已合并；Linux guest process manager 分支 `feat/vm-agent-process-manager` 已推送 commit `51694a7`，待创建 PR；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1227,14 +1227,25 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-19 llm-harness-runtime VM guest agent workspace filesystem handler
 
-**仓库**：`llm-harness-runtime`；PR #221 已创建待复审（分支 `feat/vm-agent-filesystem-handler`，commit `bd4ac7c`，refs #193）。
+**仓库**：`llm-harness-runtime`；PR #221 已合并 `main`（merge commit `bbab057`，功能 commit `bd4ac7c`，`openat2` mode 修复 commit `7d16251`，refs #193）。
 
 - **Linux handler**：新增 `WorkspaceFileHandler` 作为 `GuestAgentHandler` 的具体实现，支持 text/binary 读写追加、metadata、根目录与嵌套目录 listing、exists、目录创建、remove、tracked temp dir 与 cleanup；`Ping` / `Status` 可用，process operations 继续 fail-closed unsupported。
 - **路径安全**：workspace root 使用 `O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC`；组件解析优先 Linux `openat2` 的 `RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS | RESOLVE_NO_XDEV`，若内核/沙箱返回 `ENOSYS` 则回退到 normalized `openat + O_NOFOLLOW` 单组件解析。final file 与 metadata 均拒绝 symlink。
 - **资源边界**：路径 4096 bytes / 256 components；text 8 MiB、binary 32 MiB；目录 listing 10,000 entries 且 entry path 总量 8 MiB；temp prefix 128 bytes；递归删除 128 层。读写只接受 regular file，并用 `O_NONBLOCK` + pre/post `fstat` 拒绝 FIFO/device 等特殊文件。
 - **Cleanup 语义**：handler 只记录自身创建的 temp dir，`Cleanup` 仅递归删除 tracked paths，不清空整个 workspace，且 workspace root 不可删除。
 - **验证**：service crate 13 项测试、crate Clippy `-D warnings`、可达 workspace tests 与 workspace Clippy `-D warnings` 通过；本机因缺失 SQLite 与 D-Bus 开发库排除 6 个系统依赖受限 crate。测试覆盖 root/nested listing、text/binary I/O、metadata、exists、recursive remove、tracked cleanup、parent/final symlink、FIFO 与 request-response 集成。
-- **状态**：PR #221 待复审；该切片仍不包含 process manager/process event multiplexer、Firecracker lifecycle、镜像/Jailer/网络策略、`RemoteSandbox` / `RemoteEnv` 端到端集成或部署验证。#193 继续保持 open。
+- **状态**：PR #221 已合并；该切片不包含 process manager/process event multiplexer、Firecracker lifecycle、镜像/Jailer/网络策略、`RemoteSandbox` / `RemoteEnv` 端到端集成或部署验证。#193 继续保持 open。
+
+### 2026-09-20 llm-harness-runtime VM guest agent process manager
+
+**仓库**：`llm-harness-runtime`；分支 `feat/vm-agent-process-manager` 已推送 commit `51694a7`，待创建 PR（refs #193）。
+
+- **进程切片**：新增 Linux-only `ProcessManager`，通过 `/bin/sh -c` 执行命令，`cwd` 使用 `openat2 + RESOLVE_BENEATH | NO_SYMLINKS | NO_XDEV` 限制在 workspace 内；环境执行 `env_clear()` 后仅注入最小 `PATH` 与请求变量。
+- **输出与事件**：stdout/stderr 独立流式读取、按流限制输出并统计丢弃字节数，增量 UTF-8 解码覆盖 chunk 边界；`FrameStream::split()`、独立 writer task 与有界 outbound queue 让进程事件可与后续 request/response 并发复用。
+- **生命周期**：timeout/disconnect 使用 process group `SIGKILL`；graceful cancel 使用 `SIGTERM`，5 秒后升级 `SIGKILL`；force cancel 使用 `SIGKILL`；shell 退出后清理后台 process group 成员。取消/清理通过有界 channel 异步发送，避免通道满时误报失杀；`ManagedChild` drop 兜底清理整个 process group。
+- **Fail-closed 边界**：异步进程事件方向非法或 writer 失败时，服务立即终止连接并断开对应进程；宿主 clean close 同样断开全部进程并等待 writer 完成。
+- **验证**：service 28 项、transport 13 项测试通过；`cargo fmt --check`、相关 crate 与可达 workspace Clippy `-D warnings`、`git diff --check` 通过；`cargo test --workspace --exclude llm-harness-live-tests --exclude llm-harness-runtime-app-shell --all-targets` 通过。live tests 依赖外部 LLM 环境，Tauri shell 依赖本机缺失的 D-Bus 开发库，均为环境排除而非代码失败。
+- **状态**：分支已推送，PR 待创建；完整 guest agent 仍需组合 filesystem + process handler、vsock guest binary、Firecracker lifecycle、镜像/Jailer/网络策略、`RemoteSandbox` / `RemoteEnv` 端到端集成与部署验证。#193 继续保持 open。
 
 ### 2026-08-31 agent-team durable inbox journal
 
