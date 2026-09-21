@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-21（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport、AF_VSOCK transport、request-response service 与 Linux guest workspace filesystem handler PR #221 均已合并；Linux guest process manager 分支 `feat/vm-agent-process-manager` 已推送 commit `51694a7`，待创建 PR；Firecracker process cleanup follow-up PR #229 已合并 `main`，merge commit `8e4d529`；Firecracker readiness PR #230 已打开，head `373073d`；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
+> 最后更新：2026-09-21（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport、AF_VSOCK transport、request-response service 与 Linux guest workspace filesystem handler PR #221 均已合并；Linux guest process manager 分支 `feat/vm-agent-process-manager` 已推送 commit `51694a7`，待创建 PR；Firecracker process cleanup follow-up PR #229 已合并 `main`，merge commit `8e4d529`；Firecracker readiness PR #230 已打开，head `95e57ea`；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1259,11 +1259,11 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-21 llm-harness-runtime Firecracker readiness
 
-**仓库**：`llm-harness-runtime`；PR [#230](https://github.com/oh-my-harness/llm-harness-runtime/pull/230) 已打开，head `373073d`（refs #193）。
+**仓库**：`llm-harness-runtime`；PR [#230](https://github.com/oh-my-harness/llm-harness-runtime/pull/230) 已打开，head `95e57ea`（refs #193）。
 
 - **Readiness 语义**：`FirecrackerProcess::wait_ready` 轮询子进程状态与 API socket；连接成功即 ready，子进程退出立即失败，超时返回明确错误，已停止进程直接失败。
 - **实现边界**：使用 Tokio `UnixStream` 连接 API socket，不引入 HTTP 客户端；轮询间隔 10ms，超时时间由调用方传入。
-- **测试覆盖**：新增 API socket listening、子进程提前退出、超时三类回归测试；crate 测试达到 13/13。
+- **测试覆盖**：新增 API socket listening、子进程提前退出、超时、已停止进程四类回归测试；crate 测试达到 14/14。
 - **验证**：`cargo test -p llm-harness-vm-firecracker --all-targets`、`cargo clippy -p llm-harness-vm-firecracker --all-targets --all-features -- -D warnings`、`cargo fmt --check` 与 `git diff --check` 通过。
 - **状态**：PR #230 远端 CI 仍为已知快速失败；本地验证通过。#193 继续保持 open，jailer、镜像分配、graceful shutdown、registry recovery 与部署验证仍未完成。
 
