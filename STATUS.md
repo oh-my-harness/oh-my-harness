@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-21（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport、AF_VSOCK transport、request-response service 与 Linux guest workspace filesystem handler PR #221 均已合并；Linux guest process manager 分支 `feat/vm-agent-process-manager` 已推送 commit `51694a7`，待创建 PR；Firecracker process cleanup follow-up 分支 `fix/vm-firecracker-process-cleanup` 已推送 commit `12f60f0`，待创建 PR；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
+> 最后更新：2026-09-21（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport、AF_VSOCK transport、request-response service 与 Linux guest workspace filesystem handler PR #221 均已合并；Linux guest process manager 分支 `feat/vm-agent-process-manager` 已推送 commit `51694a7`，待创建 PR；Firecracker process cleanup follow-up PR #229 已打开，head `12f60f0`；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1249,13 +1249,13 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-21 llm-harness-runtime Firecracker process cleanup
 
-**仓库**：`llm-harness-runtime`；PR #228 已合并 `main`（merge commit `280b514`，功能 commit `182bed7`，refs #193）；follow-up 修复分支 `fix/vm-firecracker-process-cleanup` 已推送 commit `12f60f0`，待创建 PR。
+**仓库**：`llm-harness-runtime`；PR #228 已合并 `main`（merge commit `280b514`，功能 commit `182bed7`，refs #193）；follow-up PR [#229](https://github.com/oh-my-harness/llm-harness-runtime/pull/229) 已打开，head `12f60f0`。
 
 - **生产级清理**：`FirecrackerProcessConfig::command_args()` 改用 `OsString`，保留非 UTF-8 的 binary/API socket/config path；Firecracker VM 配置继续要求 host path 为绝对路径且有效 UTF-8，并在序列化前拒绝 NUL byte。
 - **失败语义**：config file 以 `create_new` 与 `0600` 写入并 `fsync`；spawn 失败、写入或 sync 失败时立即删除该文件。`stop()` 发送 kill 后等待 child 退出，再删除 API socket 与 config file，并保持幂等。
 - **兜底边界**：Drop 对未显式 stop 的进程执行 kill 与 best-effort artifact cleanup；显式 `stop()` 仍是生产调用路径，用于等待退出并返回清理错误。
 - **验证**：`cargo test -p llm-harness-vm-firecracker --all-targets` 10/10 通过，覆盖 NUL path 拒绝与 Drop artifact cleanup；`cargo clippy -p llm-harness-vm-firecracker --all-targets --all-features -- -D warnings`、`cargo fmt --check` 与 `git diff --check` 通过。
-- **状态**：#193 继续保持 open；Firecracker lifecycle manager、jailer、镜像分配、readiness、registry recovery 与部署验证仍未完成。
+- **状态**：PR #229 远端 CI 4 个 job 均在 2–5 秒失败且无 step/log，属于已知 Actions 运行器/账号问题；本地验证通过。#193 继续保持 open；Firecracker lifecycle manager、jailer、镜像分配、readiness、registry recovery 与部署验证仍未完成。
 
 ### 2026-08-31 agent-team durable inbox journal
 
