@@ -13,7 +13,7 @@
 > 2026-09-22 追加：VM guest-agent host-side `ExecutionEnv` 桥接 PR #244 已合并 `main`，merge commit `3a1f9ef3fe762efdb408da6c1da79521ef18803b`，远端功能分支已删除；#207 已被关闭，gateway/lifecycle 集成与生产化缺口由 #245 跟踪。
 > 2026-09-22 追加：Firecracker lifecycle 与 `GuestAgentEnv` 共享 guest client 的 PR #247 已合并 `main`，merge commit `409f9961ec0afc6468fbaaf6947dfa27d93e8727`，远端功能分支已删除；#245 保持 open。
 > 2026-09-22 追加：sandbox gateway backend selection PR #248 已合并 `main`，merge commit `5b5119d1bb3ebe5bd1b060509cbc0f717e5cf6b3`，远端功能分支已删除；#245 保持 open。
-> 2026-09-22 追加：AgentTeam durable chat history PR #246 已推进到 commit `df98c91525996f0b9e54c8f7498ccb82d1254143`；审查发现并修复 `before` 分页绕过 broadcast 行的 SQL 优先级缺陷与 Clippy 合并阻塞项，PR 可 review，等待远端 CI 确认。
+> 2026-09-22 追加：AgentTeam durable chat history PR #246 已 rebase 后合并 `main`，merge commit `e83a4330d7d8f1559bd025cf8bd067ea5d5c4a01`；审查发现并修复 `before` 分页绕过 broadcast 行的 SQL 优先级缺陷与 Clippy 合并阻塞项。关联 senza-studio #17 已验证并关闭。
 
 ---
 
@@ -1433,12 +1433,12 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-22 AgentTeam durable chat history review
 
-**仓库**：`llm-harness-runtime`；PR [#246](https://github.com/oh-my-harness/llm-harness-runtime/pull/246) 分支 `team/runtime-windows-test-signal`，review 修复 head `df98c91525996f0b9e54c8f7498ccb82d1254143`。
+**仓库**：`llm-harness-runtime`；PR [#246](https://github.com/oh-my-harness/llm-harness-runtime/pull/246) 已合并，merge commit `e83a4330d7d8f1559bd025cf8bd067ea5d5c4a01`，feature/review head `da7d1c56309065eeda746a9f4a56cb489b96d728`，远端分支已删除。关联 [senza-studio #17](https://github.com/oh-my-harness/senza-studio/issues/17) 已关闭（completed）。
 
 - **分页语义**：`ChatHistoryJournal::group_history` 原先因 `OR`/`AND` 优先级使 `before` 只约束 direct-reply 分支，broadcast 分支会返回越过游标的新旧行。已将 cursor 条件提升为全局谓词，并新增 broadcast + reply 混合分页回归。
 - **合并质量**：修复 `EntryId` 不必要拷贝、`send_message` 两个 large-error 签名 lint、collapsible condition、Option 简化和 direct-message API 参数数量 lint；无行为变化。
-- **验证**：`cargo fmt --check -p llm-harness-agent-team -p llm-harness-agent-team-studio` 通过；`cargo test -p llm-harness-agent --lib` 137/137、`cargo test -p llm-harness-agent-team --lib` 186/186、`cargo test -p llm-harness-agent-team-studio --lib` 134/134 通过；两个 agent-team crate Clippy `-D warnings` 通过。
-- **状态**：PR mergeable，但远端 CI pending（历史已知 GitHub Actions 账号快速失败问题）；等待 reviewer 确认 `df98c91` 后合并。
+- **验证**：rebase 后 `cargo fmt --check -p llm-harness-agent-team -p llm-harness-agent-team-studio` 通过；`cargo test -p llm-harness-agent --lib` 137/137、`cargo test -p llm-harness-agent-team --lib` 186/186、`cargo test -p llm-harness-agent-team-studio --lib` 134/134 通过；两个 agent-team crate Clippy `-D warnings` 通过。前端 `npm run test -- --run` 37/37、`npm run build` 双目标构建通过。
+- **状态**：生产验收覆盖 durable transcript、重启/删除恢复、broadcast-only reply context、稳定 message identity/sequence 分页和 delete lifecycle 事件；remote CI pending 属于历史已知 GitHub Actions 账号问题。
 
 ### 2026-08-31 agent-team durable inbox journal
 
