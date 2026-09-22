@@ -1359,13 +1359,13 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-22 llm-harness-runtime Firecracker jailer cgroup cleanup
 
-**仓库**：`llm-harness-runtime`；PR [#240](https://github.com/oh-my-harness/llm-harness-runtime/pull/240) 已推送（分支 `feat/vm-firecracker-cgroup-cleanup`，commit `d33e1361350833f0269ea3f56122340441522ce1`，refs #207），待 review。
+**仓库**：`llm-harness-runtime`；PR [#240](https://github.com/oh-my-harness/llm-harness-runtime/pull/240) 已合并 `main`（feature head `05b9c386fe3986aee804e85bd69af109d97f5d30`，merge commit `74a64cdf07cf840497fc222decaf435d8644cf35`，refs #207）。
 
 - **路径语义**：按 upstream Firecracker jailer 规则从 `/proc/mounts` 解析 cgroup mount；v2 使用 unified hierarchy 并校验 `cgroup.controllers`，v1 按 controller mount 解析。cgroup key 收紧为 `controller.property=value`。
 - **清理边界**：只删除 jailer 创建的 `<parent>/<jailer-id>` cgroup 目录，保留共享 parent；未配置 `--cgroup` 时不清理（upstream 此场景不会创建 jailer-specific cgroup）。删除通过打开 symlink-free parent descriptor 后 `unlinkat` 完成，且缺失路径按幂等成功处理。
-- **生命周期集成**：explicit stop、graceful stop、startup failure 与 Drop 均会清理 cgroup；清理错误与其他 process/image/jail 错误聚合返回，Drop 兜底忽略二次错误。
-- **测试与验证**：新增 v2/v1 路径推导、controller 可用性、幂等删除与 fake jailer lifecycle 集成测试；crate 61/61 测试、Clippy `-D warnings`、fmt、Windows MSVC target check 通过。
-- **状态**：PR #240 待 review。guest-agent shutdown confirmation、registry recovery、网络策略、gateway 端到端集成与部署验证仍未完成，#207 保持 open。
+- **生命周期集成**：explicit stop、graceful stop、startup failure 与 Drop 均会清理 cgroup；清理错误与其他 process/image/jail 错误聚合返回，Drop 兜底忽略二次错误。startup failure 与 Drop 路径均有 fake jailer 回归测试，确认只删除 jailer-specific cgroup 并保留共享 parent。
+- **测试与验证**：新增 v2/v1 路径推导、controller 可用性、幂等删除、startup failure/Drop 清理与 fake jailer lifecycle 集成测试；crate 63/63 测试、crate Clippy `-D warnings`、fmt、Windows MSVC target check 与 `git diff --check` 通过。合并前对照 upstream Firecracker jailer 源码确认默认 parent 为 jailed 可执行文件名，实际 cgroup 路径为 `<hierarchy>/<parent>/<id>`。
+- **状态**：PR #240 远端 4 个 CI job 未启动，annotations 明确为 GitHub account payments failed / spending limit，非代码失败。guest-agent shutdown confirmation、registry recovery、网络策略、gateway 端到端集成与部署验证仍未完成，#207 保持 open。
 
 ### 2026-08-31 agent-team durable inbox journal
 
