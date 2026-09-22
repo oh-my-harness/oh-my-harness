@@ -15,6 +15,7 @@
 > 2026-09-22 追加：sandbox gateway backend selection PR #248 已合并 `main`，merge commit `5b5119d1bb3ebe5bd1b060509cbc0f717e5cf6b3`，远端功能分支已删除；#245 保持 open。
 > 2026-09-22 追加：AgentTeam durable chat history PR #246 已 rebase 后合并 `main`，merge commit `e83a4330d7d8f1559bd025cf8bd067ea5d5c4a01`；审查发现并修复 `before` 分页绕过 broadcast 行的 SQL 优先级缺陷与 Clippy 合并阻塞项。关联 senza-studio #17 已验证并关闭。
 > 2026-09-22 追加：gateway Firecracker policy/CID 基础 PR #250 已推送，registry 迁移到 v2 并提供唯一 `vsock_guest_cid`，创建请求先 fail-closed 校验不支持的 FS/网络/资源策略；#249 生命周期装配保持 open。
+> 2026-09-22 追加：gateway Firecracker lifecycle 装配 PR #251 已创建并基于最新 `main`，分支 `feat/gateway-firecracker-lifecycle`，commit `45d5f09`；实现 lifecycle start/reset/shutdown、guest-agent pending proxy、CID registry 与 shell/file E2E，跨重启 Firecracker 记录保持 fail-closed。
 
 ---
 
