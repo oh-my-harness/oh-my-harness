@@ -1367,6 +1367,15 @@ model_check_feedback → calibration_report 全部通过。
 - **测试与验证**：新增 v2/v1 路径推导、controller 可用性、幂等删除、startup failure/Drop 清理与 fake jailer lifecycle 集成测试；crate 63/63 测试、crate Clippy `-D warnings`、fmt、Windows MSVC target check 与 `git diff --check` 通过。合并前对照 upstream Firecracker jailer 源码确认默认 parent 为 jailed 可执行文件名，实际 cgroup 路径为 `<hierarchy>/<parent>/<id>`。
 - **状态**：PR #240 远端 4 个 CI job 未启动，annotations 明确为 GitHub account payments failed / spending limit，非代码失败。guest-agent shutdown confirmation、registry recovery、网络策略、gateway 端到端集成与部署验证仍未完成，#207 保持 open。
 
+### 2026-09-22 llm-harness-runtime Firecracker vsock UDS transport
+
+**仓库**：`llm-harness-runtime`；PR [#241](https://github.com/oh-my-harness/llm-harness-runtime/pull/241) 已推送（分支 `feat/vm-firecracker-vsock-uds`，commit `6b7e71aa48804a944fe2dc5bdfc7b4cbf013d3bb`，refs #207），待 review。
+
+- **Transport 语义**：新增 Linux-only Firecracker host-side vsock UDS adapter，按 upstream Firecracker muxer 协议发送 `connect <guest-port>\n`，校验 bounded `OK <host-port>\n`，随后在同一 Unix stream 上承载既有 guest-agent framed protocol。
+- **Host client**：`GuestAgentClient::connect_firecracker_vsock` 提供 host 侧入口，为后续 lifecycle guest-agent readiness 和 coordinated shutdown 集成解除 transport 阻塞。
+- **测试与验证**：新增 UDS 握手成功/失败、guest-agent frame round-trip 与 client Ping 集成测试；transport 16/16、service library 37/37 与 agent binary 3/3 测试、两个 crate Clippy `-D warnings`、fmt、Windows MSVC target check 与 `git diff --check` 通过。
+- **状态**：PR #241 远端 4 个 CI job 未启动，annotations 明确为 GitHub account payments failed / spending limit，非代码失败。该切片尚未把 guest-agent readiness 接入 `FirecrackerLifecycle`，也未完成 coordinated shutdown confirmation、registry recovery、网络策略、gateway 端到端集成或部署验证，#207 保持 open。
+
 ### 2026-08-31 agent-team durable inbox journal
 
 **仓库**：`llm-harness-runtime`，分支 `feat/agent-team-studio`（远端 `377978a`）。
