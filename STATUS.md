@@ -1369,7 +1369,7 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-22 llm-harness-runtime Firecracker vsock UDS transport
 
-**仓库**：`llm-harness-runtime`；PR [#241](https://github.com/oh-my-harness/llm-harness-runtime/pull/241) 已推送（分支 `feat/vm-firecracker-vsock-uds`，commit `6b7e71aa48804a944fe2dc5bdfc7b4cbf013d3bb`，refs #207），待 review。
+**仓库**：`llm-harness-runtime`；PR [#241](https://github.com/oh-my-harness/llm-harness-runtime/pull/241) 已合并 `main`（feature head `6b7e71aa48804a944fe2dc5bdfc7b4cbf013d3bb`，merge commit `86b09b78ca4c0b43d8785efc9ab1855c47339160`，refs #207）。
 
 - **Transport 语义**：新增 Linux-only Firecracker host-side vsock UDS adapter，按 upstream Firecracker muxer 协议发送 `connect <guest-port>\n`，校验 bounded `OK <host-port>\n`，随后在同一 Unix stream 上承载既有 guest-agent framed protocol。
 - **Host client**：`GuestAgentClient::connect_firecracker_vsock` 提供 host 侧入口，为后续 lifecycle guest-agent readiness 和 coordinated shutdown 集成解除 transport 阻塞。
