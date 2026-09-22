@@ -4,6 +4,7 @@
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 > 2026-09-22 追加：Firecracker jailer command/config primitive PR #236 已合并 `main`，merge commit `0e152ec1e253fc5e6b60d5c20c5569ea3ea425b7`，远端功能分支已删除；#193 保持 open。
 > 2026-09-22 追加：Firecracker jailer path semantics 修复 PR #237 已合并 `main`，merge commit `ef8e2e8f64ec6d16a4ab3e8a811975bd0f0685ef`，远端功能分支已删除。
+> 2026-09-22 追加：Firecracker jailed process startup primitive PR #238 已合并 `main`，merge commit `86d01ab9f3790efe3d7468f1bebf35d27bbcbccc`，远端功能分支已删除。
 
 ---
 
@@ -1332,6 +1333,16 @@ model_check_feedback → calibration_report 全部通过。
 - **失败关闭**：拒绝 process binary 与 jailer exec-file 不一致、非 UTF-8 jailer 路径、缺少 file name 的 binary 路径，以及 `/` 作为 chroot base；新增 outside-chroot、mismatched binary、non-UTF-8 与 root chroot 回归。
 - **验证**：合并前后均执行 `cargo fmt --check`、crate 46/46 测试、Clippy `-D warnings`、Windows MSVC target check 与 `git diff --check`，全部通过。
 - **状态**：远端 CI 仍因 GitHub account payments / spending limit 未启动 job，非代码失败。#193 保持 open；chroot 内资源 staging、权限、cgroup cleanup、lifecycle 集成与部署验证仍未完成。
+
+### 2026-09-22 llm-harness-runtime Firecracker jailed process startup
+
+**仓库**：`llm-harness-runtime`；PR [#238](https://github.com/oh-my-harness/llm-harness-runtime/pull/238) 已合并 `main`（merge commit `86d01ab9f3790efe3d7468f1bebf35d27bbcbccc`，refs #193），远端功能分支已删除。
+
+- **Jail 内配置**：`FirecrackerConfig::to_jailed_json` 要求 kernel/rootfs/vsock host path 位于 jail root 内，并转换为 `/vmlinux` 这类 jail-relative JSON 路径，避免把 host 绝对路径传给 chroot 后的 Firecracker。
+- **Process 原语**：新增 `FirecrackerProcess::start_jailed`；以 exclusive `0600` 写 config、chown 到 jailer uid/gid、启动 jailer binary，并沿用现有 readiness、stop/drop 与 API/config cleanup。调用方必须预先创建并 stage chroot 及 kernel/rootfs/vsock 资源。
+- **测试覆盖**：fake jailer 验证 jail-relative JSON、config ownership、ready/stop 清理、启动失败清理与 outside-chroot resource 拒绝；crate 测试 51/51 通过。
+- **验证**：合并前后均执行 `cargo fmt --check`、crate 测试、Clippy `-D warnings`、Windows MSVC target check 与 `git diff --check`，全部通过。
+- **状态**：远端 CI 仍因 GitHub billing / spending limit 未启动 job，非代码失败。#193 保持 open；chroot 生命周期 staging/removal、cgroup cleanup、完整 lifecycle 集成、registry recovery、网络策略与部署验证仍未完成。
 
 ### 2026-08-31 agent-team durable inbox journal
 
