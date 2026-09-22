@@ -7,6 +7,7 @@
 > 2026-09-22 追加：Firecracker jailed process startup primitive PR #238 已合并 `main`，merge commit `86d01ab9f3790efe3d7468f1bebf35d27bbcbccc`，远端功能分支已删除。
 > 2026-09-22 更正：#193 已由用户手动关闭；剩余生产化缺口由 #200、#201、#203、#204、#205、#206、#207 跟踪，后续 Firecracker jailer lifecycle 工作引用 #207。
 > 2026-09-22 追加：Firecracker jailed lifecycle integration PR #239 已合并 `main`，merge commit `4983a9a06271b129ceccd3f6e16d24a421d75cce`，远端功能分支已删除；#207 保持 open。
+> 2026-09-22 追加：Firecracker jailer cgroup cleanup PR #240 已推送并基于最新 `origin/main` rebase，分支 `feat/vm-firecracker-cgroup-cleanup`，commit `d33e1361350833f0269ea3f56122340441522ce1`，refs #207，待 review。
 
 ---
 
@@ -1355,6 +1356,16 @@ model_check_feedback → calibration_report 全部通过。
 - **安全清理**：stop、startup failure 与 Drop 先清理 process/image artifacts，再通过目录 descriptor 递归移除 jail 内容和本 lifecycle 创建的父目录，避免 host path traversal；目录项在读取时限制数量，避免超限目录造成无界内存收集；多个 jail 共享且非空的创建祖先目录会保留，不再误报清理失败。fake jailer 测试覆盖嵌套目录、symlink、API socket、失败清理与共享祖先并发清理。
 - **测试与验证**：合并前 crate 56/56 测试、crate Clippy `-D warnings` 与 fmt 通过；此前该 PR 已通过 Windows MSVC target check、非 live workspace tests 与非 live workspace Clippy。完整 workspace test 在本机因缺失 `dbus-1.pc` 无法构建 desktop app；live LLM 测试需外部凭据，已排除并明确记录。
 - **状态**：PR #239 远端 4 个 CI job 未启动，annotations 明确为 GitHub account payments failed / spending limit，非代码失败。jailer-created cgroup cleanup、guest-agent-coordinated shutdown confirmation、registry recovery、网络策略、gateway 端到端集成与部署验证仍未完成，#207 保持 open。
+
+### 2026-09-22 llm-harness-runtime Firecracker jailer cgroup cleanup
+
+**仓库**：`llm-harness-runtime`；PR [#240](https://github.com/oh-my-harness/llm-harness-runtime/pull/240) 已推送（分支 `feat/vm-firecracker-cgroup-cleanup`，commit `d33e1361350833f0269ea3f56122340441522ce1`，refs #207），待 review。
+
+- **路径语义**：按 upstream Firecracker jailer 规则从 `/proc/mounts` 解析 cgroup mount；v2 使用 unified hierarchy 并校验 `cgroup.controllers`，v1 按 controller mount 解析。cgroup key 收紧为 `controller.property=value`。
+- **清理边界**：只删除 jailer 创建的 `<parent>/<jailer-id>` cgroup 目录，保留共享 parent；未配置 `--cgroup` 时不清理（upstream 此场景不会创建 jailer-specific cgroup）。删除通过打开 symlink-free parent descriptor 后 `unlinkat` 完成，且缺失路径按幂等成功处理。
+- **生命周期集成**：explicit stop、graceful stop、startup failure 与 Drop 均会清理 cgroup；清理错误与其他 process/image/jail 错误聚合返回，Drop 兜底忽略二次错误。
+- **测试与验证**：新增 v2/v1 路径推导、controller 可用性、幂等删除与 fake jailer lifecycle 集成测试；crate 61/61 测试、Clippy `-D warnings`、fmt、Windows MSVC target check 通过。
+- **状态**：PR #240 待 review。guest-agent shutdown confirmation、registry recovery、网络策略、gateway 端到端集成与部署验证仍未完成，#207 保持 open。
 
 ### 2026-08-31 agent-team durable inbox journal
 
