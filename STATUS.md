@@ -8,7 +8,7 @@
 > 2026-09-22 更正：#193 已由用户手动关闭；剩余生产化缺口由 #200、#201、#203、#204、#205、#206、#207 跟踪，后续 Firecracker jailer lifecycle 工作引用 #207。
 > 2026-09-22 追加：Firecracker jailed lifecycle integration PR #239 已合并 `main`，merge commit `4983a9a06271b129ceccd3f6e16d24a421d75cce`，远端功能分支已删除；#207 保持 open。
 > 2026-09-22 追加：Firecracker jailer cgroup cleanup PR #240 已推送并基于最新 `origin/main` rebase，分支 `feat/vm-firecracker-cgroup-cleanup`，commit `d33e1361350833f0269ea3f56122340441522ce1`，refs #207，待 review。
-> 2026-09-22 追加：Firecracker guest-agent readiness PR #242 已基于最新 `origin/main` rebase 并推送，分支 `feat/vm-firecracker-agent-readiness`，commit `e72149a4132b29ab05c602991884af86f8132fc6`，refs #207，待 review。
+> 2026-09-22 追加：Firecracker guest-agent readiness PR #242 已合并 `main`，merge commit `f6e64a6aa5bb58c4c259fdb0b4d988d25e75ef0d`，远端功能分支已删除；#207 保持 open。
 
 ---
 
@@ -1379,14 +1379,14 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-22 llm-harness-runtime Firecracker guest-agent readiness
 
-**仓库**：`llm-harness-runtime`；PR [#242](https://github.com/oh-my-harness/llm-harness-runtime/pull/242) 已推送并基于最新 `origin/main` rebase（feature head `e72149a4132b29ab05c602991884af86f8132fc6`，refs #207），待 review。
+**仓库**：`llm-harness-runtime`；PR [#242](https://github.com/oh-my-harness/llm-harness-runtime/pull/242) 已合并 `main`（feature head `e72149a4132b29ab05c602991884af86f8132fc6`，merge commit `f6e64a6aa5bb58c4c259fdb0b4d988d25e75ef0d`，refs #207）。
 
 - **Readiness 语义**：`FirecrackerLifecycle::start` 在 API socket ready 后，通过 host-side vsock UDS 连接 guest agent，重试直到同一个配置 deadline，且必须完成 `Ping`/`Pong` 才返回成功；成功后保留 `GuestAgentClient` 供后续 VM sandbox 文件/shell/shutdown 集成使用。
 - **配置边界**：新增 guest-agent vsock port 配置，默认 `6000`，拒绝 port 0；readiness deadline 同时约束 API socket 与 guest-agent 阶段，避免最坏两倍等待。
 - **清理修复**：Firecracker process 现在同时拥有并清理 API socket、config 与 vsock UDS；explicit stop、graceful stop、startup failure 与 Drop 均不会遗留 guest-agent UDS 文件。
 - **清理所有权**：process 启动前显式拒绝既有 vsock UDS，避免直接使用 process 原语时 stop/drop 删除调用方未拥有的文件。
 - **测试与验证**：新增协议级 fake Firecracker，覆盖 UDS handshake、`Ping`/`Pong`、默认/自定义 guest port、guest readiness 超时清理、既有 vsock 拒绝、jailed lifecycle 与 stop/drop artifact 清理；Firecracker 68/68、service 37+3、transport 16/16 测试通过，三个 VM crate Clippy `-D warnings`、fmt、Windows MSVC target check 与 `git diff --check` 通过。完整 workspace 测试仍受既有缺失 `dbus-1.pc` 阻塞，与改动无关。
-- **状态**：PR #242 待 review。该切片不包含 coordinated shutdown confirmation、gateway VM backend 集成、registry recovery、宿主侧网络/资源策略执行或端到端多租户验证，#207 保持 open。
+- **状态**：PR #242 远端 4 个 CI job 因 GitHub account payments failed / spending limit 未启动，非代码失败；本地相关验证通过后合并。该切片不包含 coordinated shutdown confirmation、gateway VM backend 集成、registry recovery、宿主侧网络/资源策略执行或端到端多租户验证，#207 保持 open。
 
 ### 2026-08-31 agent-team durable inbox journal
 
