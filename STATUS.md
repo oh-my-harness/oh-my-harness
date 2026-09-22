@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-21（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport、AF_VSOCK transport、request-response service 与 Linux guest workspace filesystem handler PR #221 均已合并；Linux guest process manager 分支 `feat/vm-agent-process-manager` 已推送 commit `51694a7`，待创建 PR；Firecracker process cleanup follow-up PR #229 已合并 `main`，merge commit `8e4d529`；Firecracker readiness PR #230 已合并 `main`，merge commit `b66d234`；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
+> 最后更新：2026-09-22（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport、AF_VSOCK transport、request-response service 与 Linux guest workspace filesystem handler PR #221 均已合并；Linux guest process manager 分支 `feat/vm-agent-process-manager` 已推送 commit `51694a7`，待创建 PR；Firecracker process cleanup follow-up PR #229 已合并 `main`，merge commit `8e4d529`；Firecracker readiness PR #230 已合并 `main`，merge commit `b66d234`；Firecracker ephemeral image allocator PR #231 已创建，refs #193；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1266,6 +1266,17 @@ model_check_feedback → calibration_report 全部通过。
 - **测试覆盖**：新增 API socket listening、子进程提前退出、超时、已停止进程四类回归测试；crate 测试达到 14/14。
 - **验证**：`cargo test -p llm-harness-vm-firecracker --all-targets`、`cargo clippy -p llm-harness-vm-firecracker --all-targets --all-features -- -D warnings`、`cargo fmt --check` 与 `git diff --check` 通过。
 - **状态**：PR #230 远端 CI 仍为已知快速失败；合并基于本地验证与代码审查完成。#193 继续保持 open，jailer、镜像分配、graceful shutdown、registry recovery 与部署验证仍未完成。
+
+### 2026-09-22 llm-harness-runtime Firecracker ephemeral image allocator
+
+**仓库**：`llm-harness-runtime`；PR [#231](https://github.com/oh-my-harness/llm-harness-runtime/pull/231) 已创建，分支 `feat/vm-firecracker-image-allocation`，commit `5e67bb3`，基于 `origin/main` `b66d234`（refs #193）。
+
+- **镜像分配**：新增 Linux-only `FirecrackerImageAllocator` / `FirecrackerImage`，将非空 regular base image 复制为独占创建的 ephemeral image，目标文件为 `0600`，复制后 fsync 文件与父目录。
+- **路径安全**：拒绝相对路径、原始路径中的 `.` / `..` 组件与 NUL byte；base 与 destination 均从 `/` 开始逐组件 `openat`，每个目录与最终文件都使用 `O_NOFOLLOW`，中间 symlink 不再能绕过末段检查。
+- **清理语义**：`FirecrackerImage` 持有目标父目录 descriptor 与文件名，显式 remove / Drop 通过 `unlinkat` 删除并 fsync 父目录，避免父路径被替换后的误删；分配失败也会清理目标文件。
+- **测试覆盖**：正常复制与权限、已存在目标、Drop 清理、base symlink、空 base、末段/中间父目录 symlink、路径穿越与 `.` 组件；crate 测试 23/23 通过。
+- **验证**：`cargo test -p llm-harness-vm-firecracker --all-targets`、`cargo clippy -p llm-harness-vm-firecracker --all-targets --all-features -- -D warnings`、`cargo fmt --check`、`git diff --check` 与 Windows target `cargo check` 通过（Windows check 暴露 `main` 上既有 `process.rs` cfg import warning，非本切片引入）。
+- **状态**：PR #231 可合并且基于最新 `origin/main`；远端 4 个 CI job 在 2–4 秒失败，GitHub annotations 明确为 account payments failed / spending limit 需调整，job 未启动，非代码失败。#193 继续保持 open。本切片不包含 jailer、VM lifecycle manager、graceful guest shutdown、registry recovery、网络策略或部署验证。
 
 ### 2026-08-31 agent-team durable inbox journal
 
