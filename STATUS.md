@@ -12,6 +12,7 @@
 > 2026-09-22 追加：Firecracker guest cleanup before shutdown PR #243 已合并 `main`，merge commit `92a5b9c8560374813d7c4ca4d918bf2a802f8a04`，远端功能分支已删除；#207 保持 open。
 > 2026-09-22 追加：VM guest-agent host-side `ExecutionEnv` 桥接 PR #244 已合并 `main`，merge commit `3a1f9ef3fe762efdb408da6c1da79521ef18803b`，远端功能分支已删除；#207 已被关闭，gateway/lifecycle 集成与生产化缺口由 #245 跟踪。
 > 2026-09-22 追加：Firecracker lifecycle 与 `GuestAgentEnv` 共享 guest client 的 PR #247 已合并 `main`，merge commit `409f9961ec0afc6468fbaaf6947dfa27d93e8727`，远端功能分支已删除；#245 保持 open。
+> 2026-09-22 追加：sandbox gateway backend selection PR #248 已合并 `main`，merge commit `5b5119d1bb3ebe5bd1b060509cbc0f717e5cf6b3`，远端功能分支已删除；#245 保持 open。
 
 ---
 
@@ -1419,6 +1420,15 @@ model_check_feedback → calibration_report 全部通过。
 - **兼容性**：`FirecrackerLifecycle::guest_agent` 保持返回 `Option<&GuestAgentClient>`；`GuestAgentEnv::new` 保持原签名，新增共享所有权构造路径。
 - **测试与验证**：生命周期集成测试校验共享 Arc 引用计数；env 5/5、Firecracker 69/69 测试通过，两个 crate Clippy `-D warnings`、fmt、guest service Windows MSVC target check 与 `git diff --check` 通过。
 - **状态**：PR #247 已合并；远端 4 个 CI job 仍因 GitHub account payments failed / spending limit 在 1–5 秒内失败且无 step 记录，非代码失败；本地相关验证通过后合并。该切片是 #245 gateway 集成的前置条件；尚未开始 backend selection、`GatewaySandbox::Firecracker` 装配、policy enforcement、registry recovery 或多租户 E2E。
+
+### 2026-09-22 llm-harness-runtime sandbox gateway backend selection
+
+**仓库**：`llm-harness-runtime`；PR [#248](https://github.com/oh-my-harness/llm-harness-runtime/pull/248)（feature head `83378211b2d54149c51801392e6b334d1ca53582`，merge commit `5b5119d1bb3ebe5bd1b060509cbc0f717e5cf6b3`，refs [#245](https://github.com/oh-my-harness/llm-harness-runtime/issues/245)，已合并）。
+
+- **backend 合同**：gateway 默认保持 Bwrap；Firecracker backend 必须显式配置，并提前校验 artifact 路径、VM limits、readiness timeout、guest-agent port 和 vsock CID capacity。
+- **fail-closed 语义**：builder 修改后统一重新校验；Firecracker sandbox creation 在 lifecycle 装配完成前显式拒绝，不回退 Bwrap。
+- **测试与验证**：gateway 28/28 集成测试通过，Clippy `-D warnings`、fmt 与 `git diff --check` 通过；PR #248 clean 后合并。
+- **状态**：#245 下一步是 `GatewaySandbox::Firecracker` 装配、真实 lifecycle start/reset/shutdown、policy mapping、registry recovery 和 Firecracker E2E。
 
 ### 2026-08-31 agent-team durable inbox journal
 
