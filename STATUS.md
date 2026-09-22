@@ -9,6 +9,7 @@
 > 2026-09-22 追加：Firecracker jailed lifecycle integration PR #239 已合并 `main`，merge commit `4983a9a06271b129ceccd3f6e16d24a421d75cce`，远端功能分支已删除；#207 保持 open。
 > 2026-09-22 追加：Firecracker jailer cgroup cleanup PR #240 已推送并基于最新 `origin/main` rebase，分支 `feat/vm-firecracker-cgroup-cleanup`，commit `d33e1361350833f0269ea3f56122340441522ce1`，refs #207，待 review。
 > 2026-09-22 追加：Firecracker guest-agent readiness PR #242 已合并 `main`，merge commit `f6e64a6aa5bb58c4c259fdb0b4d988d25e75ef0d`，远端功能分支已删除；#207 保持 open。
+> 2026-09-22 追加：Firecracker guest cleanup before shutdown PR #243 已推送，分支 `feat/vm-firecracker-guest-cleanup`，commit `e1db161c56618ab23d5927cd78fe888397bcd2cd`，refs #207，待 review。
 
 ---
 
@@ -1387,6 +1388,16 @@ model_check_feedback → calibration_report 全部通过。
 - **清理所有权**：process 启动前显式拒绝既有 vsock UDS，避免直接使用 process 原语时 stop/drop 删除调用方未拥有的文件。
 - **测试与验证**：新增协议级 fake Firecracker，覆盖 UDS handshake、`Ping`/`Pong`、默认/自定义 guest port、guest readiness 超时清理、既有 vsock 拒绝、jailed lifecycle 与 stop/drop artifact 清理；Firecracker 68/68、service 37+3、transport 16/16 测试通过，三个 VM crate Clippy `-D warnings`、fmt、Windows MSVC target check 与 `git diff --check` 通过。完整 workspace 测试仍受既有缺失 `dbus-1.pc` 阻塞，与改动无关。
 - **状态**：PR #242 远端 4 个 CI job 因 GitHub account payments failed / spending limit 未启动，非代码失败；本地相关验证通过后合并。该切片不包含 coordinated shutdown confirmation、gateway VM backend 集成、registry recovery、宿主侧网络/资源策略执行或端到端多租户验证，#207 保持 open。
+
+### 2026-09-22 llm-harness-runtime Firecracker guest cleanup before shutdown
+
+**仓库**：`llm-harness-runtime`；PR [#243](https://github.com/oh-my-harness/llm-harness-runtime/pull/243)（feature head `e1db161c56618ab23d5927cd78fe888397bcd2cd`，refs #207，待 review）。
+
+- **Graceful stop 顺序**：`FirecrackerLifecycle::graceful_stop` 现在先向 retained `GuestAgentClient` 发送 `Cleanup` 并等待 `CleanupResult`，再执行 Firecracker CtrlAltDel graceful shutdown；`stop()` 保持 force-stop 语义，不等待 guest cleanup。
+- **Deadline 与失败语义**：guest cleanup 与 VM graceful shutdown 共享一个总 deadline；guest cleanup 超时或失败不会阻断 VM destruction、image、jail、cgroup 与 socket 清理，错误会聚合返回，避免 fail-safe 清理被跳过。
+- **语义边界**：当前 `CleanupResult` 表示已向 tracked processes 派发 cancel 并删除 tracked temp dirs，不等待所有进程退出；该切片不能称为完整 coordinated shutdown confirmation。
+- **测试与验证**：新增 fake Firecracker 多帧协议桩，覆盖 cleanup-before-shutdown 顺序与 guest cleanup 超时后强制销毁且清理所有 lifecycle artifacts；Firecracker 69/69、service 37+3、transport 16/16 测试通过，Firecracker Clippy `-D warnings`、fmt、Windows MSVC target check 与 `git diff --check` 通过。
+- **状态**：PR #243 待 review；#207 仍需 gateway VM backend 集成、完整 shutdown confirmation、registry recovery、宿主侧网络/资源策略执行和端到端多租户验证。
 
 ### 2026-08-31 agent-team durable inbox journal
 
