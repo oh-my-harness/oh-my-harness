@@ -5,6 +5,7 @@
 > 2026-09-22 追加：Firecracker jailer command/config primitive PR #236 已合并 `main`，merge commit `0e152ec1e253fc5e6b60d5c20c5569ea3ea425b7`，远端功能分支已删除；#193 保持 open。
 > 2026-09-22 追加：Firecracker jailer path semantics 修复 PR #237 已合并 `main`，merge commit `ef8e2e8f64ec6d16a4ab3e8a811975bd0f0685ef`，远端功能分支已删除。
 > 2026-09-22 追加：Firecracker jailed process startup primitive PR #238 已合并 `main`，merge commit `86d01ab9f3790efe3d7468f1bebf35d27bbcbccc`，远端功能分支已删除。
+> 2026-09-22 更正：#193 已由用户手动关闭；剩余生产化缺口由 #200、#201、#203、#204、#205、#206、#207 跟踪，后续 Firecracker jailer lifecycle 工作引用 #207。
 
 ---
 
@@ -1323,7 +1324,7 @@ model_check_feedback → calibration_report 全部通过。
 - **官方语义对齐**：jailer ID 按 Firecracker upstream 限制为 1–64 byte 且仅 alphanumeric/hyphen；cgroup key 拒绝空值、空白、NUL、绝对路径与 `.` / `..`；resource limit 仅接受 `fsize` / `no-file` 的非负整数且拒绝重复 key；host path 保持绝对、非空、无 NUL、无 `.` / `..`。
 - **测试覆盖**：默认与可选 command 参数顺序、process config 校验、非法 path/id/uid/gid、cgroup version 显式要求、cgroup/resource-limit 格式与重复 key、parent cgroup 与 netns 路径规则；crate 测试 41/41 通过。
 - **验证**：合并前后均执行 `cargo fmt --check`、`cargo test -p llm-harness-vm-firecracker --all-targets`、`cargo clippy -p llm-harness-vm-firecracker --all-targets --all-features -- -D warnings`、Windows MSVC target `cargo check` 与 `git diff --check`，全部通过。
-- **状态**：远端 4 个 CI job 未启动，annotations 明确为 GitHub account payments failed / spending limit，非代码失败。#193 保持 open；jailed lifecycle integration（chroot 内 API/config/rootfs/kernel 路径、权限、cgroup cleanup、graceful/force stop 与 readiness）、registry recovery、网络策略、gateway 端到端集成与部署验证仍未完成。
+- **状态**：远端 4 个 CI job 未启动，annotations 明确为 GitHub account payments failed / spending limit，非代码失败。#193 已由用户手动关闭；剩余工作由 #200/#201/#203–#207 跟踪，jailed lifecycle integration（chroot 内 API/config/rootfs/kernel 路径、权限、cgroup cleanup、graceful/force stop 与 readiness）、registry recovery、网络策略、gateway 端到端集成与部署验证仍未完成。
 
 ### 2026-09-22 llm-harness-runtime Firecracker jailer path semantics
 
@@ -1332,7 +1333,7 @@ model_check_feedback → calibration_report 全部通过。
 - **路径语义修复**：`FirecrackerJailerConfig::chroot_dir()` 按 chroot base、Firecracker binary 文件名、jailer ID 派生 `<chroot_base>/<firecracker>/<id>/root`；`command_args()` 要求 host API socket/config file 位于该 chroot 内，并在 `--` 后转换为 jail-relative Firecracker 参数，避免把 host 绝对路径误传给已 chroot 的 Firecracker。
 - **失败关闭**：拒绝 process binary 与 jailer exec-file 不一致、非 UTF-8 jailer 路径、缺少 file name 的 binary 路径，以及 `/` 作为 chroot base；新增 outside-chroot、mismatched binary、non-UTF-8 与 root chroot 回归。
 - **验证**：合并前后均执行 `cargo fmt --check`、crate 46/46 测试、Clippy `-D warnings`、Windows MSVC target check 与 `git diff --check`，全部通过。
-- **状态**：远端 CI 仍因 GitHub account payments / spending limit 未启动 job，非代码失败。#193 保持 open；chroot 内资源 staging、权限、cgroup cleanup、lifecycle 集成与部署验证仍未完成。
+- **状态**：远端 CI 仍因 GitHub account payments / spending limit 未启动 job，非代码失败。#193 已由用户手动关闭；剩余工作由 #200/#201/#203–#207 跟踪，chroot 内资源 staging、权限、cgroup cleanup、lifecycle 集成与部署验证仍未完成。
 
 ### 2026-09-22 llm-harness-runtime Firecracker jailed process startup
 
@@ -1342,7 +1343,7 @@ model_check_feedback → calibration_report 全部通过。
 - **Process 原语**：新增 `FirecrackerProcess::start_jailed`；以 exclusive `0600` 写 config、chown 到 jailer uid/gid、启动 jailer binary，并沿用现有 readiness、stop/drop 与 API/config cleanup。调用方必须预先创建并 stage chroot 及 kernel/rootfs/vsock 资源。
 - **测试覆盖**：fake jailer 验证 jail-relative JSON、config ownership、ready/stop 清理、启动失败清理与 outside-chroot resource 拒绝；crate 测试 51/51 通过。
 - **验证**：合并前后均执行 `cargo fmt --check`、crate 测试、Clippy `-D warnings`、Windows MSVC target check 与 `git diff --check`，全部通过。
-- **状态**：远端 CI 仍因 GitHub billing / spending limit 未启动 job，非代码失败。#193 保持 open；chroot 生命周期 staging/removal、cgroup cleanup、完整 lifecycle 集成、registry recovery、网络策略与部署验证仍未完成。
+- **状态**：远端 CI 仍因 GitHub billing / spending limit 未启动 job，非代码失败。#193 已由用户手动关闭；剩余工作由 #200/#201/#203–#207 跟踪，chroot 生命周期 staging/removal、cgroup cleanup、完整 lifecycle 集成、registry recovery、网络策略与部署验证仍未完成。
 
 ### 2026-08-31 agent-team durable inbox journal
 
