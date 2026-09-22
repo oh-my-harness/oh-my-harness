@@ -10,6 +10,7 @@
 > 2026-09-22 追加：Firecracker jailer cgroup cleanup PR #240 已推送并基于最新 `origin/main` rebase，分支 `feat/vm-firecracker-cgroup-cleanup`，commit `d33e1361350833f0269ea3f56122340441522ce1`，refs #207，待 review。
 > 2026-09-22 追加：Firecracker guest-agent readiness PR #242 已合并 `main`，merge commit `f6e64a6aa5bb58c4c259fdb0b4d988d25e75ef0d`，远端功能分支已删除；#207 保持 open。
 > 2026-09-22 追加：Firecracker guest cleanup before shutdown PR #243 已合并 `main`，merge commit `92a5b9c8560374813d7c4ca4d918bf2a802f8a04`，远端功能分支已删除；#207 保持 open。
+> 2026-09-22 追加：VM guest-agent host-side `ExecutionEnv` 桥接 PR #244 已推送，分支 `feat/vm-agent-execution-env`，commit `5f5b83d1de9eaf9f166c8a10476b4767308b2717`，refs #207，待 review。
 
 ---
 
@@ -1398,6 +1399,16 @@ model_check_feedback → calibration_report 全部通过。
 - **语义边界**：当前 `CleanupResult` 表示已向 tracked processes 派发 cancel 并删除 tracked temp dirs，不等待所有进程退出；该切片不能称为完整 coordinated shutdown confirmation。
 - **测试与验证**：新增 fake Firecracker 多帧协议桩，覆盖 cleanup-before-shutdown 顺序与 guest cleanup 超时后强制销毁且清理所有 lifecycle artifacts；Firecracker 69/69、service 37+3、transport 16/16 测试通过，Firecracker Clippy `-D warnings`、fmt、Windows MSVC target check 与 `git diff --check` 通过。
 - **状态**：PR #243 远端 4 个 CI job 因 GitHub account payments failed / spending limit 未启动，非代码失败；本地相关验证通过后合并。#207 仍需 gateway VM backend 集成、完整 shutdown confirmation、registry recovery、宿主侧网络/资源策略执行和端到端多租户验证。
+
+### 2026-09-22 llm-harness-runtime VM guest-agent ExecutionEnv
+
+**仓库**：`llm-harness-runtime`；PR [#244](https://github.com/oh-my-harness/llm-harness-runtime/pull/244)（feature head `5f5b83d1de9eaf9f166c8a10476b4767308b2717`，refs #207，待 review）。
+
+- **层级边界**：新增 host-side crate `llm-harness-vm-agent-env`，把 `GuestAgentClient` 适配为 runtime `ExecutionEnv`；guest 侧 `llm-harness-vm-agent-service` 保持协议/服务实现，不引入 `llm-harness-types`，避免 guest 镜像携带 host runtime 与 provider adapter 依赖。
+- **文件语义**：覆盖 text/binary 读写与 append、metadata/list/exists/create/remove、temp dir 与 cleanup，路径仍由 guest-agent 协议统一执行 `/workspace` containment 与 base64/大小限制。
+- **Shell 语义**：流式转发 stdout/stderr callback，映射 exit、timeout、error、abort；shell abort 会向 guest 发送 force cancel。若取消发生在 start 响应等待期间，后台任务会在收到 `ProcessStarted` 后继续 force-cancel 并排空终止事件，避免只取消 host future 而留下 guest 进程。
+- **测试与验证**：新增真实 `WorkspaceAgentHandler` E2E、非零退出映射、启动后取消和启动期取消协议回归；env 4/4、service 37+3 测试通过，两个 crate Clippy `-D warnings`、fmt、guest service Windows MSVC target check、依赖树检查与 `git diff --check` 通过。
+- **状态**：该切片尚未接入 `FirecrackerLifecycle` 或 sandbox gateway；#207 仍需 VM backend 装配、policy enforcement、registry recovery、完整 shutdown confirmation 和端到端多租户验证。
 
 ### 2026-08-31 agent-team durable inbox journal
 
