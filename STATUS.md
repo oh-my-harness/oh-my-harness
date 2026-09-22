@@ -10,7 +10,7 @@
 > 2026-09-22 追加：Firecracker jailer cgroup cleanup PR #240 已推送并基于最新 `origin/main` rebase，分支 `feat/vm-firecracker-cgroup-cleanup`，commit `d33e1361350833f0269ea3f56122340441522ce1`，refs #207，待 review。
 > 2026-09-22 追加：Firecracker guest-agent readiness PR #242 已合并 `main`，merge commit `f6e64a6aa5bb58c4c259fdb0b4d988d25e75ef0d`，远端功能分支已删除；#207 保持 open。
 > 2026-09-22 追加：Firecracker guest cleanup before shutdown PR #243 已合并 `main`，merge commit `92a5b9c8560374813d7c4ca4d918bf2a802f8a04`，远端功能分支已删除；#207 保持 open。
-> 2026-09-22 追加：VM guest-agent host-side `ExecutionEnv` 桥接 PR #244 已推送并 rebase 到最新 `origin/main`，分支 `feat/vm-agent-execution-env`，commit `3731c2dca3c9fa1be9ec6a1f92857cc27a092080`，refs #207，待 review。
+> 2026-09-22 追加：VM guest-agent host-side `ExecutionEnv` 桥接 PR #244 已合并 `main`，merge commit `3a1f9ef3fe762efdb408da6c1da79521ef18803b`，远端功能分支已删除；#207 保持 open。
 
 ---
 
@@ -1402,13 +1402,13 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-22 llm-harness-runtime VM guest-agent ExecutionEnv
 
-**仓库**：`llm-harness-runtime`；PR [#244](https://github.com/oh-my-harness/llm-harness-runtime/pull/244)（feature head `3731c2dca3c9fa1be9ec6a1f92857cc27a092080`，基于最新 `origin/main`，refs #207，待 review）。
+**仓库**：`llm-harness-runtime`；PR [#244](https://github.com/oh-my-harness/llm-harness-runtime/pull/244)（feature head `3731c2dca3c9fa1be9ec6a1f92857cc27a092080`，merge commit `3a1f9ef3fe762efdb408da6c1da79521ef18803b`，refs #207，已合并）。
 
 - **层级边界**：新增 host-side crate `llm-harness-vm-agent-env`，把 `GuestAgentClient` 适配为 runtime `ExecutionEnv`；guest 侧 `llm-harness-vm-agent-service` 保持协议/服务实现，不引入 `llm-harness-types`，避免 guest 镜像携带 host runtime 与 provider adapter 依赖。
 - **文件语义**：覆盖 text/binary 读写与 append、metadata/list/exists/create/remove、temp dir 与 cleanup，路径仍由 guest-agent 协议统一执行 `/workspace` containment 与 base64/大小限制。
 - **Shell 与取消语义**：流式转发 stdout/stderr callback，映射 exit、timeout、error、abort；shell abort 会向 guest 发送 force cancel。若取消发生在 start 响应等待期间，后台任务会在收到 `ProcessStarted` 后继续 force-cancel 并排空终止事件；文件请求取消改为 client cancellation-safe future，迟到响应会被消费且不会用 detached task 延长 client 生命周期。
 - **测试与验证**：新增真实 `WorkspaceAgentHandler` E2E、非零退出映射、启动后取消、启动期取消和迟到响应回归；env 5/5、service 38+3 测试通过，两个 crate Clippy `-D warnings`、fmt、guest service Windows MSVC target check、依赖树检查与 `git diff --check` 通过。
-- **状态**：该切片尚未接入 `FirecrackerLifecycle` 或 sandbox gateway；#207 仍需 VM backend 装配、policy enforcement、registry recovery、完整 shutdown confirmation 和端到端多租户验证。
+- **状态**：PR #244 已合并，远端 4 个 CI job 仍因 GitHub account payments failed / spending limit 在 2–5 秒内失败且无 step 记录，非代码失败；本地相关验证通过后合并。该切片尚未接入 `FirecrackerLifecycle` 或 sandbox gateway；#207 仍需 VM backend 装配、policy enforcement、registry recovery、完整 shutdown confirmation 和端到端多租户验证。
 
 ### 2026-08-31 agent-team durable inbox journal
 
