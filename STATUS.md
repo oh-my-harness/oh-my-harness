@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-22（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport、AF_VSOCK transport、request-response service 与 Linux guest workspace filesystem handler PR #221 均已合并；Linux guest process manager 分支 `feat/vm-agent-process-manager` 已推送 commit `51694a7`，待创建 PR；Firecracker process cleanup follow-up PR #229 已合并 `main`，merge commit `8e4d529`；Firecracker readiness PR #230 已合并 `main`，merge commit `b66d234`；Firecracker ephemeral image allocator PR #231 已合并 `main`，merge commit `3dacc76`；Firecracker lifecycle PR #232 已合并 `main`，merge commit `674a2db`，#193 已恢复 open；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
+> 最后更新：2026-09-22（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport、AF_VSOCK transport、request-response service 与 Linux guest workspace filesystem handler PR #221 均已合并；Linux guest process manager 分支 `feat/vm-agent-process-manager` 已推送 commit `51694a7`，待创建 PR；Firecracker process cleanup follow-up PR #229 已合并 `main`，merge commit `8e4d529`；Firecracker readiness PR #230 已合并 `main`，merge commit `b66d234`；Firecracker ephemeral image allocator PR #231 已合并 `main`，merge commit `3dacc76`；Firecracker lifecycle PR #232 已合并 `main`，merge commit `674a2db`；Firecracker graceful stop PR #233 已合并 `main`，merge commit `9d67281`，#193 保持 open；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 
 ---
@@ -1288,6 +1288,17 @@ model_check_feedback → calibration_report 全部通过。
 - **测试覆盖**：路径派生、已存在 artifact、input/artifact 碰撞、不可执行 binary、run directory symlink、正常 start/stop、startup 失败清理与 Drop 清理；crate 测试 31/31 通过。
 - **验证**：`cargo test -p llm-harness-vm-firecracker --all-targets`、`cargo clippy -p llm-harness-vm-firecracker --all-targets --all-features -- -D warnings`、`cargo fmt --check`、`git diff --check` 与 Windows target `cargo check` 通过（Windows check 仍暴露 `main` 既有 `process.rs` cfg import warning）。
 - **状态**：PR #232 远端 4 个 CI job 仍在 2–4 秒失败，annotation 确认为 GitHub account payments failed / spending limit，job 未启动，非代码失败。#193 继续保持 open；jailer、graceful guest shutdown、registry recovery、网络策略、gateway 端到端集成与部署验证仍未完成。
+
+### 2026-09-22 llm-harness-runtime Firecracker graceful stop
+
+**仓库**：`llm-harness-runtime`；PR [#233](https://github.com/oh-my-harness/llm-harness-runtime/pull/233) 已合并 `main`（merge commit `9d67281`，功能 commit `7b6c8a7`，refs #193），远端功能分支已删除。
+
+- **优雅停止**：`FirecrackerProcess::graceful_stop(timeout)` 通过 Firecracker Unix API 发送 `PUT /actions` / `SendCtrlAltDel`，HTTP 响应只读取状态行且限制在 1 KiB 内，避免异常 server 造成无界读取。
+- **超时兜底**：请求与等待退出均受调用方 timeout 控制；信号失败、请求超时或进程未退出时会回落到现有 force-stop 路径，等待 kill 后清理 API socket 与 config file，并返回包含主因和 fallback 结果的错误。
+- **Lifecycle 集成**：`FirecrackerLifecycle::graceful_stop(timeout)` 复用 process graceful stop，成功后删除 ephemeral image；重复调用保持幂等，Drop 仍保留 force cleanup 兜底。
+- **测试覆盖**：fake Unix HTTP server 验证 `SendCtrlAltDel` 请求与 204 响应、artifact 清理、幂等；无响应 server 验证请求超时后强制 kill 与清理；lifecycle 集成测试覆盖优雅停止后 rootfs/API/config 均消失。crate 测试 33/33 通过。
+- **验证**：`cargo test -p llm-harness-vm-firecracker --all-targets`、`cargo clippy -p llm-harness-vm-firecracker --all-targets --all-features -- -D warnings`、`cargo fmt --check`、`git diff --check` 与 Windows target `cargo check` 通过；本切片同时修复 Windows 下 `process.rs` 既有 `Duration` cfg import warning。
+- **状态**：PR #233 远端 CI 仍为 GitHub billing/spending limit 导致 job 未启动，非代码失败。#193 继续保持 open；guest-agent-coordinated shutdown confirmation、jailer、registry recovery、网络策略、gateway 端到端集成与部署验证仍未完成。
 
 ### 2026-08-31 agent-team durable inbox journal
 
