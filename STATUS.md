@@ -11,7 +11,7 @@
 > 2026-09-22 追加：Firecracker guest-agent readiness PR #242 已合并 `main`，merge commit `f6e64a6aa5bb58c4c259fdb0b4d988d25e75ef0d`，远端功能分支已删除；#207 保持 open。
 > 2026-09-22 追加：Firecracker guest cleanup before shutdown PR #243 已合并 `main`，merge commit `92a5b9c8560374813d7c4ca4d918bf2a802f8a04`，远端功能分支已删除；#207 保持 open。
 > 2026-09-22 追加：VM guest-agent host-side `ExecutionEnv` 桥接 PR #244 已合并 `main`，merge commit `3a1f9ef3fe762efdb408da6c1da79521ef18803b`，远端功能分支已删除；#207 已被关闭，gateway/lifecycle 集成与生产化缺口由 #245 跟踪。
-> 2026-09-22 追加：Firecracker lifecycle 与 `GuestAgentEnv` 共享 guest client 的 PR #247 已推送并基于最新 `origin/main`，分支 `feat/vm-firecracker-shared-guest-agent`，commit `c4196c78ca9bed31668b8c3bd139bdde4b3bcc5f`，refs #245，待 review。
+> 2026-09-22 追加：Firecracker lifecycle 与 `GuestAgentEnv` 共享 guest client 的 PR #247 已合并 `main`，merge commit `409f9961ec0afc6468fbaaf6947dfa27d93e8727`，远端功能分支已删除；#245 保持 open。
 
 ---
 
@@ -1413,12 +1413,12 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-22 llm-harness-runtime Firecracker shared guest client
 
-**仓库**：`llm-harness-runtime`；PR [#247](https://github.com/oh-my-harness/llm-harness-runtime/pull/247)（feature head `c4196c78ca9bed31668b8c3bd139bdde4b3bcc5f`，基于最新 `origin/main`，refs [#245](https://github.com/oh-my-harness/llm-harness-runtime/issues/245)，待 review）。
+**仓库**：`llm-harness-runtime`；PR [#247](https://github.com/oh-my-harness/llm-harness-runtime/pull/247)（feature head `c4196c78ca9bed31668b8c3bd139bdde4b3bcc5f`，merge commit `409f9961ec0afc6468fbaaf6947dfa27d93e8727`，refs [#245](https://github.com/oh-my-harness/llm-harness-runtime/issues/245)，已合并）。
 
 - **所有权语义**：`FirecrackerLifecycle` 继续保留 guest client 用于 graceful cleanup，同时通过 `guest_agent_shared` 暴露同一 client；`GuestAgentEnv::from_shared` 复用该连接，避免复制状态或提前关闭底层连接。
 - **兼容性**：`FirecrackerLifecycle::guest_agent` 保持返回 `Option<&GuestAgentClient>`；`GuestAgentEnv::new` 保持原签名，新增共享所有权构造路径。
 - **测试与验证**：生命周期集成测试校验共享 Arc 引用计数；env 5/5、Firecracker 69/69 测试通过，两个 crate Clippy `-D warnings`、fmt、guest service Windows MSVC target check 与 `git diff --check` 通过。
-- **状态**：该切片是 #245 gateway 集成的前置条件；尚未开始 backend selection、`GatewaySandbox::Firecracker` 装配、policy enforcement、registry recovery 或多租户 E2E。
+- **状态**：PR #247 已合并；远端 4 个 CI job 仍因 GitHub account payments failed / spending limit 在 1–5 秒内失败且无 step 记录，非代码失败；本地相关验证通过后合并。该切片是 #245 gateway 集成的前置条件；尚未开始 backend selection、`GatewaySandbox::Firecracker` 装配、policy enforcement、registry recovery 或多租户 E2E。
 
 ### 2026-08-31 agent-team durable inbox journal
 
