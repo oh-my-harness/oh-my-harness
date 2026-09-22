@@ -1302,13 +1302,14 @@ model_check_feedback → calibration_report 全部通过。
 
 ### 2026-09-22 llm-harness-runtime AgentTeam 成员移除 timeout 修复
 
-**仓库**：`llm-harness-runtime`；分支 `feat/agent-team-member-management` 已 rebase 到 `main` `9d67281` 并推送，最新 HEAD `ab8d365`（尚无关联 PR）。
+**仓库**：`llm-harness-runtime`；PR [#235](https://github.com/oh-my-harness/llm-harness-runtime/pull/235) open，分支 `feat/agent-team-member-management` 已 rebase 到 `main` `9d67281`，最新 HEAD `ab8d365`。
 
 - **Rebase 事实**：原分支 4 个功能/文档提交已重放在最新 `origin/main` 上，远端通过 `--force-with-lease` 更新，未创建分叉分支。
 - **生命周期修复**：`SocialContext::remove_agent` 现在会取消该成员所有 pending timeout、清除 fired key 并取消 durable timer row，再停止 monitor、确认丢弃 inbox 并注销 registry；避免被删除成员的 reminder/delegation 之后继续写入 inbox 或修改关系强度。
 - **回归测试**：成员删除测试新增 pending timer 断言，验证 timer task 在删除后被 abort、registry pending count 归零且不会再投递。
 - **验证**：`cargo fmt --check`、`cargo test -p llm-harness-agent-team -p llm-harness-agent-team-studio --all-targets`（agent-team 176 unit + 9 integration；studio 135 unit + 11 integration，3 live ignored）、相关与可自动化 workspace clippy `-D warnings`、`cargo test --workspace --exclude llm-harness-runtime-app --exclude llm-harness-runtime-app-shell --exclude llm-harness-live-tests`、`git diff --check` 通过。
 - **验证边界**：完整 workspace 测试在本机被两个既有环境问题阻塞：Tauri app 依赖缺少系统 `dbus-1` 开发包；`llm-harness-live-tests::agent_harness` 需要外部 LLM 且多个用例超过 60 秒。二者均非本分支代码失败。
+- **CI 事实**：PR #235 的 4 个 job 均在 3–7 秒失败且 0 step，annotations 明确为 account payments failed / spending limit 需调整，runner 未启动；非代码失败。
 
 ### 2026-08-31 agent-team durable inbox journal
 
