@@ -6,6 +6,7 @@
 > 2026-09-22 追加：Firecracker jailer path semantics 修复 PR #237 已合并 `main`，merge commit `ef8e2e8f64ec6d16a4ab3e8a811975bd0f0685ef`，远端功能分支已删除。
 > 2026-09-22 追加：Firecracker jailed process startup primitive PR #238 已合并 `main`，merge commit `86d01ab9f3790efe3d7468f1bebf35d27bbcbccc`，远端功能分支已删除。
 > 2026-09-22 更正：#193 已由用户手动关闭；剩余生产化缺口由 #200、#201、#203、#204、#205、#206、#207 跟踪，后续 Firecracker jailer lifecycle 工作引用 #207。
+> 2026-09-22 追加：Firecracker jailed lifecycle integration PR #239 已推送并基于最新 `origin/main` rebase，分支 `feat/vm-firecracker-jailed-lifecycle`，commit `f42244176f9e5814fa12390a9b0a8102e6ba5c7f`，refs #207，待 review。
 
 ---
 
@@ -1344,6 +1345,16 @@ model_check_feedback → calibration_report 全部通过。
 - **测试覆盖**：fake jailer 验证 jail-relative JSON、config ownership、ready/stop 清理、启动失败清理与 outside-chroot resource 拒绝；crate 测试 51/51 通过。
 - **验证**：合并前后均执行 `cargo fmt --check`、crate 测试、Clippy `-D warnings`、Windows MSVC target check 与 `git diff --check`，全部通过。
 - **状态**：远端 CI 仍因 GitHub billing / spending limit 未启动 job，非代码失败。#193 已由用户手动关闭；剩余工作由 #200/#201/#203–#207 跟踪，chroot 生命周期 staging/removal、cgroup cleanup、完整 lifecycle 集成、registry recovery、网络策略与部署验证仍未完成。
+
+### 2026-09-22 llm-harness-runtime Firecracker jailed lifecycle integration
+
+**仓库**：`llm-harness-runtime`；PR [#239](https://github.com/oh-my-harness/llm-harness-runtime/pull/239) 已推送（分支 `feat/vm-firecracker-jailed-lifecycle`，commit `f42244176f9e5814fa12390a9b0a8102e6ba5c7f`，refs #207），待 review。
+
+- **Lifecycle 集成**：`FirecrackerLifecycleConfig` 新增可选 `FirecrackerJailerConfig`；配置 jailer 后，rootfs、API socket、config、vsock UDS 与 staged kernel 均派生到 jailer chroot 内，并复用 `FirecrackerProcess::start_jailed` 的 jail-relative 配置与启动语义。
+- **安全 staging**：新增 Linux-only `FirecrackerJail`，用 `openat`/`mkdirat` 创建专用 chroot，拒绝 symlink 与既有 root；kernel 与 private rootfs 以 `0600` staging 并 chown 到 jailer uid/gid，chroot root 以 `0700` 归属 jailer uid/gid。
+- **安全清理**：stop、startup failure 与 Drop 先清理 process/image artifacts，再通过目录 descriptor 递归移除 jail 内容和本 lifecycle 创建的父目录，避免 host path traversal；fake jailer 测试覆盖嵌套目录、symlink、API socket 与失败清理。
+- **测试与验证**：crate 55/55 测试通过；crate Clippy `-D warnings`、fmt、Windows MSVC target check、非 live workspace tests 与非 live workspace Clippy 通过。完整 workspace test 在本机因缺失 `dbus-1.pc` 无法构建 desktop app；live LLM 测试需外部凭据，已排除并明确记录。
+- **状态**：PR #239 远端 4 个 CI job 未启动，annotations 明确为 GitHub account payments failed / spending limit，非代码失败。jailer-created cgroup cleanup、guest-agent-coordinated shutdown confirmation、registry recovery、网络策略、gateway 端到端集成与部署验证仍未完成，#207 保持 open。
 
 ### 2026-08-31 agent-team durable inbox journal
 
