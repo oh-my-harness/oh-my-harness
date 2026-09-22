@@ -2,6 +2,7 @@
 
 > 最后更新：2026-09-22（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport、AF_VSOCK transport、request-response service 与 Linux guest workspace filesystem handler PR #221 均已合并；Linux guest process manager 分支 `feat/vm-agent-process-manager` 已推送 commit `51694a7`，待创建 PR；Firecracker process cleanup follow-up PR #229 已合并 `main`，merge commit `8e4d529`；Firecracker readiness PR #230 已合并 `main`，merge commit `b66d234`；Firecracker ephemeral image allocator PR #231 已合并 `main`，merge commit `3dacc76`；Firecracker lifecycle PR #232 已合并 `main`，merge commit `674a2db`；Firecracker graceful stop PR #233 已合并 `main`，merge commit `9d67281`，#193 保持 open；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
+> 2026-09-22 追加：Firecracker jailer command/config primitive PR #236 已合并 `main`，merge commit `0e152ec1e253fc5e6b60d5c20c5569ea3ea425b7`，远端功能分支已删除；#193 保持 open。
 
 ---
 
@@ -1311,6 +1312,16 @@ model_check_feedback → calibration_report 全部通过。
 - **验证边界**：完整 workspace 测试在本机被两个既有环境问题阻塞：Tauri app 依赖缺少系统 `dbus-1` 开发包；`llm-harness-live-tests::agent_harness` 需要外部 LLM 且多个用例超过 60 秒。二者均非本分支代码失败。
 - **CI 事实**：PR #235 的 4 个 job 均在 3–7 秒失败且 0 step，annotations 明确为 account payments failed / spending limit 需调整，runner 未启动；非代码失败。
 - **合并后验证**：在 checkout `main` `4994f7b` 的 worktree 上复跑 `cargo fmt --check`、两个 AgentTeam crate 全部测试与 clippy `-D warnings`，全部通过。
+
+### 2026-09-22 llm-harness-runtime Firecracker jailer command config
+
+**仓库**：`llm-harness-runtime`；PR [#236](https://github.com/oh-my-harness/llm-harness-runtime/pull/236) 已合并 `main`（merge commit `0e152ec1e253fc5e6b60d5c20c5569ea3ea425b7`，refs #193），远端功能分支已删除。
+
+- **Command primitive**：新增 Linux-only `FirecrackerJailerConfig`，生成 `--id`、`--exec-file`、`--uid`、`--gid`、`--chroot-base-dir`、cgroup、parent cgroup、netns 与 resource-limit 参数，并通过 `--` 转发现有 Firecracker process 参数；第一版明确不暴露 `--daemonize` 与 `--new-pid-ns`。
+- **官方语义对齐**：jailer ID 按 Firecracker upstream 限制为 1–64 byte 且仅 alphanumeric/hyphen；cgroup key 拒绝空值、空白、NUL、绝对路径与 `.` / `..`；resource limit 仅接受 `fsize` / `no-file` 的非负整数且拒绝重复 key；host path 保持绝对、非空、无 NUL、无 `.` / `..`。
+- **测试覆盖**：默认与可选 command 参数顺序、process config 校验、非法 path/id/uid/gid、cgroup version 显式要求、cgroup/resource-limit 格式与重复 key、parent cgroup 与 netns 路径规则；crate 测试 41/41 通过。
+- **验证**：合并前后均执行 `cargo fmt --check`、`cargo test -p llm-harness-vm-firecracker --all-targets`、`cargo clippy -p llm-harness-vm-firecracker --all-targets --all-features -- -D warnings`、Windows MSVC target `cargo check` 与 `git diff --check`，全部通过。
+- **状态**：远端 4 个 CI job 未启动，annotations 明确为 GitHub account payments failed / spending limit，非代码失败。#193 保持 open；jailed lifecycle integration（chroot 内 API/config/rootfs/kernel 路径、权限、cgroup cleanup、graceful/force stop 与 readiness）、registry recovery、网络策略、gateway 端到端集成与部署验证仍未完成。
 
 ### 2026-08-31 agent-team durable inbox journal
 
