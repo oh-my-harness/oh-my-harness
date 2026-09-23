@@ -1,6 +1,6 @@
 # oh-my-harness 项目当前进度
 
-> 最后更新：2026-09-22（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport、AF_VSOCK transport、request-response service 与 Linux guest workspace filesystem handler PR #221 均已合并；Linux guest process manager 分支 `feat/vm-agent-process-manager` 已推送 commit `51694a7`，待创建 PR；Firecracker process cleanup follow-up PR #229 已合并 `main`，merge commit `8e4d529`；Firecracker readiness PR #230 已合并 `main`，merge commit `b66d234`；Firecracker ephemeral image allocator PR #231 已合并 `main`，merge commit `3dacc76`；Firecracker lifecycle PR #232 已合并 `main`，merge commit `674a2db`；Firecracker graceful stop PR #233 已合并 `main`，merge commit `9d67281`，#193 保持 open；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
+> 最后更新：2026-09-23（runtime App Tauri desktop shell PR #218 已合并；VM guest agent frame transport、AF_VSOCK transport、request-response service 与 Linux guest workspace filesystem handler PR #221 均已合并；Linux guest process manager 分支 `feat/vm-agent-process-manager` 已推送 commit `51694a7`，待创建 PR；Firecracker process cleanup follow-up PR #229 已合并 `main`，merge commit `8e4d529`；Firecracker readiness PR #230 已合并 `main`，merge commit `b66d234`；Firecracker ephemeral image allocator PR #231 已合并 `main`，merge commit `3dacc76`；Firecracker lifecycle PR #232 已合并 `main`，merge commit `674a2db`；Firecracker graceful stop PR #233 已合并 `main`，merge commit `9d67281`，#193 保持 open；AgentTeam 成员动态管理与 SenzaStudio 共享协作工作区已完成并推送；Linux AppImage 与正式 packaged E2E 已验证；runtime-first AgentTeam M1–M5 与 remote sandbox #193 相关合并状态见下文对应章节。）
 > 2026-09-11 补充：已确认 GLM-5.3-Flash 官方模型上下文为 1M、最大输出 128K；官方 TB2.1 84.3、DeepSWE v1.1 63.4。Flash DeepSWE 本地 run 使用 400K benchmark contract。
 > 2026-09-22 追加：Firecracker jailer command/config primitive PR #236 已合并 `main`，merge commit `0e152ec1e253fc5e6b60d5c20c5569ea3ea425b7`，远端功能分支已删除；#193 保持 open。
 > 2026-09-22 追加：Firecracker jailer path semantics 修复 PR #237 已合并 `main`，merge commit `ef8e2e8f64ec6d16a4ab3e8a811975bd0f0685ef`，远端功能分支已删除。
@@ -16,6 +16,7 @@
 > 2026-09-22 追加：AgentTeam durable chat history PR #246 已 rebase 后合并 `main`，merge commit `e83a4330d7d8f1559bd025cf8bd067ea5d5c4a01`；审查发现并修复 `before` 分页绕过 broadcast 行的 SQL 优先级缺陷与 Clippy 合并阻塞项。关联 senza-studio #17 已验证并关闭。
 > 2026-09-22 追加：gateway Firecracker policy/CID 基础 PR #250 已推送，registry 迁移到 v2 并提供唯一 `vsock_guest_cid`，创建请求先 fail-closed 校验不支持的 FS/网络/资源策略；#249 生命周期装配保持 open。
 > 2026-09-22 追加：gateway Firecracker lifecycle 装配 PR #251 已合并 `main`，merge commit `c717353a829bf256e221e0ac391478ae96c8d3fb`，远端功能分支已删除；实现 lifecycle start/reset/shutdown、guest-agent pending proxy、CID registry 与 shell/file E2E。跨重启 Firecracker 记录当前 fail-closed，自动恢复需后续 issue 跟踪。
+> 2026-09-23 追加：Firecracker crash-safe restart recovery PR #253 已基于最新 `main` rebase 并推送，分支 `feat/firecracker-restart-recovery`，commit `8bc56e2`，refs #252，待 review；本地 Firecracker 73 个测试、Clippy `-D warnings` 与 gateway 34 个测试通过。
 
 ---
 
