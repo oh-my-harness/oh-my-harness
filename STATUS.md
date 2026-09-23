@@ -16,7 +16,7 @@
 > 2026-09-22 追加：AgentTeam durable chat history PR #246 已 rebase 后合并 `main`，merge commit `e83a4330d7d8f1559bd025cf8bd067ea5d5c4a01`；审查发现并修复 `before` 分页绕过 broadcast 行的 SQL 优先级缺陷与 Clippy 合并阻塞项。关联 senza-studio #17 已验证并关闭。
 > 2026-09-22 追加：gateway Firecracker policy/CID 基础 PR #250 已推送，registry 迁移到 v2 并提供唯一 `vsock_guest_cid`，创建请求先 fail-closed 校验不支持的 FS/网络/资源策略；#249 生命周期装配保持 open。
 > 2026-09-22 追加：gateway Firecracker lifecycle 装配 PR #251 已合并 `main`，merge commit `c717353a829bf256e221e0ac391478ae96c8d3fb`，远端功能分支已删除；实现 lifecycle start/reset/shutdown、guest-agent pending proxy、CID registry 与 shell/file E2E。跨重启 Firecracker 记录当前 fail-closed，自动恢复需后续 issue 跟踪。
-> 2026-09-23 追加：Firecracker crash-safe restart recovery PR #253 已基于最新 `main` rebase 并推送，分支 `feat/firecracker-restart-recovery`，commit `8bc56e2`，refs #252，待 review；本地 Firecracker 73 个测试、Clippy `-D warnings` 与 gateway 34 个测试通过。
+> 2026-09-23 追加：Firecracker crash-safe restart recovery PR #253 已合并 `main`，merge commit `f7410abbb4801d00dfc5ba023ee94c980f3cd2da`；实现持久 PID 所有权校验、stale VM 优雅回收、gateway 重启记录恢复为 `creating`、显式 `/start` 恢复启动与 lifecycle 并发互斥。本地 Firecracker 73 个测试、Clippy `-D warnings` 与 gateway 36 个测试通过；#252 可关闭。
 
 ---
 
